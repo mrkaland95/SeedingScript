@@ -1,33 +1,47 @@
-import os
-import time
-import a2s
+import os, time, a2s, sys
 
-seedingThreshold = 40 # The threshold at which the pc will shut down
+
+
+
+sleeptime = 60 # How often the script will query the server in seconds.
+seedingThreshold = 40 # The critical player threshold at which the chosen action will be taken.
 address = ("r2f.tacticaltriggernometry.com", 27165)
-userChoice = input("Input 'shutdown' if you wish your computer to shut off, or input 'close' to close the game \n")
-#while not userChoice.lower() == "shutdown" or userChoice.lower() == "close":
+validInputs = ["close", "shutdown"]
+
+
+while True:
+    try:
+        args = sys.argv[1:][0]
+        userChoice = args
+        break
+    except IndexError:
+        userChoice = ""
+        userChoice = input(
+        "Input 'shutdown' if you wish your computer to shut off, or input 'close' to close the game \n" )
+        if not userChoice.lower() in validInputs:
+            print("Please input a valid string. Either 'shutdown' or 'close'. CTRL+C to abort the program")
+            print(userChoice)
+        else:
+            break
+
+
+
 while True:
     seedingThreshold = 40
-    serverplayer = a2s.players(address)
+    serverplayers = a2s.players(address)
     players = []
-    for player in (serverplayer):
+    for player in (serverplayers):
         if not player.name == "":
             players.append(player)
     playercount = len(players)
-    print("The player count is currently %d " % playercount)
+    print("Currently %d players on the server" % playercount)
     if playercount >= seedingThreshold:
-        print("Above seeding threshold \nShutting down")
-        #      os.system("shutdown /s /t 1")
-    time.sleep(60)
-
-
-
-#shutdown = input("Do you wish to shutdown your computer ? (Yes / No ) \n ")
-#if isinstance(shutdown, str):
- #   if shutdown.lower() == "yes":
-
-#else:
- #   raise Exception("Not a valid input, must be a string of letters")
-
-
-
+        if userChoice.lower() in validInputs[1]:
+            print("Shutting down the computer")
+            #os.system("shutdown /s /t 1")
+            break
+        elif userChoice.lower() == validInputs[0]:
+            print("Closing down the game")
+            os.system("TASKKILL /F /IM SquadGame.Exe")
+            break
+    time.sleep(sleeptime)
