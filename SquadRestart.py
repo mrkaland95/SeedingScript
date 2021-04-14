@@ -2,6 +2,8 @@
 
 
 
+
+
 import os, time, a2s, sys
 
 
@@ -16,11 +18,13 @@ while True:
     try:
         args = sys.argv[1:][0]
         userChoice = args
-        break
+        if userChoice is not "":
+            break
     except IndexError:
-        userChoice = ""
         userChoice = input(
-        "Input 'shutdown' if you wish your computer to shut off, or input 'close' to close the game \n" )
+        "Input 'shutdown' if you wish your computer to shut off, or input 'close' to close the game \n"
+        )
+
         if not userChoice.lower() in validInputs:
             print("Please input a valid string. Either 'shutdown' or 'close'. CTRL+C to abort the program")
             print(userChoice)
@@ -33,8 +37,8 @@ def main(sleeptime, treshold):
     while True:
         serverplayers = a2s.players(address)
         players = []
-        for player in (serverplayers):
-            if not player.name == "":
+        for player in serverplayers:
+            if player.name != "":
                 players.append(player)
         playercount = len(players)
         print("Currently %d players on the server" % playercount)
@@ -49,5 +53,7 @@ def main(sleeptime, treshold):
                 break
         time.sleep(sleeptime)
 
+
 if __name__ == '__main__':
     main(sleeptime, seedingThreshold)
+
