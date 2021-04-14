@@ -1,9 +1,10 @@
 import os, time, a2s, sys
+import datetime
 
 
 
-sleeptime = 2  # How often the script will query the server, meausured in seconds.
-seedingThreshold = 3  # The critical player threshold at which the chosen action will be taken.
+sleeptime = 60  # How often the script will query the server, meausured in seconds.
+seedingThreshold = 45  # The critical player threshold at which the chosen action will be taken.
 address = ("r2f.tacticaltriggernometry.com", 27165)
 validInputs = ["close", "shutdown"]
 
@@ -28,25 +29,28 @@ while True:
 def main(sleeptime, treshold):
     while True:
         try:
+            now = datetime.datetime.now()
+            current_time = now.strftime("%H:%M")
             serverplayers = a2s.players(address)
             players = []
             for player in serverplayers:
                 if player.name != "":
                     players.append(player)
             playercount = len(players)
-            print("Currently %d players on the server" % playercount)
+            print(current_time + "  --  Currently %d players on the server" % playercount)
             if playercount >= treshold:
                 if userChoice.lower() in validInputs[1]:
                     print("Shutting down the computer")
-                    #os.system("shutdown /s /t 1")
+                    os.system("shutdown /s /t 1")
                     break
-                elif userChoice.lower() == validInputs[0]:
+                elif userChoice.lower() in validInputs[0]:
                     print("Closing down the game")
                     os.system("TASKKILL /F /IM SquadGame.Exe")
                     break
-            time.sleep(sleeptime)
-        except:
+        except Exception:
             pass
+        time.sleep(sleeptime)
+
 
 
 
