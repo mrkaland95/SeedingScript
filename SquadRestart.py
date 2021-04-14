@@ -1,87 +1,94 @@
 import os, time, a2s, sys
 import datetime
-import tkinter as tk
+import tkinter
+import tkMessagebox
 
-root = tk.Tk()
-frame = tk.Frame(root)
-frame.pack()
+
+
+
+
+shutdownbutton = Tkinter.Button()
 sleeptime = 60  # How often the script will query the server, meausured in seconds.
 seedingThreshold = 45  # The critical player threshold at which the chosen action will be taken.
 address = ("r2f.tacticaltriggernometry.com", 27165)
-validInputs = ["close", "shutdown"]
+gameexecutable = "SquadGame.exe"
 
 
 close = tk.Button(frame,
-                   text="QUIT",
+                   text="close",
                    fg="red",
-                   command=close())
+                   command=
 button.pack(side=tk.LEFT)
 shutdown = tk.Button(frame,
-                   text="Hello",
-                   command=shutdown())
+                   text="shutdown",
+                     fg="red",
+                   command=shutdown
 slogan.pack(side=tk.LEFT)
 
 
 
-def close():
+def gameclose(playercount, threshold, executable):
+    """
+    Function that shuts down the game when the playercount reaches the critical threshold.
+    """
+    if playercount >= threshold:
+        print("Closing down the game")
+        os.system("TASKKILL /F /IM %s" % executable)
+    return
+
+
+
+
+def playercount(server):
+    """
+    The amount of players that are actively loaded in to the server
+    :param the server a2s server address that will be queried:
+    :return:
+    """
+    serverplayers = a2s.players(server)
+    players = []
+    for player in serverplayers:
+        if player.name != "":
+            players.append(player)
+    return len(players)
 
 
 
 
 
-def shutdown(treshold, sleeptime):
-    while True:
-        try:
-            now = datetime.datetime.now()
-            current_time = now.strftime("%H:%M")
-            serverplayers = a2s.players(address)
-            players = []
-            for player in serverplayers:
-                if player.name != "":
-                    players.append(player)
-            playercount = len(players)
-            print(current_time + "  --  Currently %d players on the server" % playercount)
-            if playercount >= treshold:
-                print("Shutting down the computer")
-                os.system("shutdown /s /t 1")
-            except Exception:
-            pass
-        time.sleep(sleeptime)
+def shutdown(playercount, threshold):
+    """
+    Shuts down the computer upon hitting the desired threshold
+    :param playercount:
+    :param threshold:
+    :return:
+    """
+    if playercount >= threshold:
+        print("Shutting down the computer")
+        os.system("shutdown /s /t 1")
+    return
 
 
 
 
-def userprompt():
-    while True:
-        try:
-            args = sys.argv[1:][0]
-            userChoice = args
-            if userChoice != "":
-                break
-        except IndexError:
-            userChoice = input(
-            "Input 'shutdown' if you wish your computer to shut off, or input 'close' to close the game,"
-            " upon hitting the threshold"
-            " \n"
-            )
-            if not userChoice.lower() in validInputs:
-                print("Please input a valid string. Either 'shutdown' or 'close'. CTRL+C to abort the program")
-            else:
-                break
+
+
+
+
+def argstaken():
+    try:
+        args = sys.argv[1:][0]
+        if args != "":
+            return
+    except IndexError: # The program will throw an indexerror if no arguments were supplied on start.
+        pass
 
 
 
 def main(sleeptime, treshold):
     while True:
         try:
-            now = datetime.datetime.now()
-            current_time = now.strftime("%H:%M")
-            serverplayers = a2s.players(address)
-            players = []
-            for player in serverplayers:
-                if player.name != "":
-                    players.append(player)
-            playercount = len(players)
+            playercount()
             print(current_time + "  --  Currently %d players on the server" % playercount)
             if playercount >= treshold:
                 if userChoice.lower() in validInputs[1]:
@@ -90,7 +97,7 @@ def main(sleeptime, treshold):
                     break
                 elif userChoice.lower() in validInputs[0]:
                     print("Closing down the game")
-                    os.system("TASKKILL /F /IM SquadGame.Exe")
+                    os.system("TASKKILL /F /IM %s" % gameexecutable)
                     break
         except Exception:
             pass
