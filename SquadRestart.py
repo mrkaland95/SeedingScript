@@ -3,9 +3,10 @@ import datetime
 from tkinter import *
 
 sleeptime = 5  # How often the script will query the server, measured in seconds.
-seedingThreshold = 45  # The critical player threshold at which the chosen action will be taken.
+seedingThreshold = 50  # The critical player threshold at which the chosen action will be taken.
 address = ("r2f.tacticaltriggernometry.com", 27165)
 gameexecutable = "SquadGame.exe"
+userinput = ""
 
 
 def GUI():
@@ -14,11 +15,21 @@ def GUI():
     :return:
     """
     top = Tk()
-    top.geometry("300x200")
-    shutdownbutton = Button(top, text="Shutdown computer", pady=30, padx=30)
+    shutdownbutton = Button(top, text="Shutdown computer", padx=50,pady=50)
+    gameclosebutton = Button(top, text="Close down game",padx=50,pady=50)
+    shutdownbutton.grid(row=1, collumn=0)
+    gameclosebutton.grid(row=2, collumn=0)
+    gameclosebutton.pack()
     shutdownbutton.pack()
     window = Label(top, text="SeedingScript")
     window.pack()
+    window.mainloop()
+
+def shutdownbutton():
+    global userinput = "shutdown"
+    return
+
+
 
 
 def gameclose(playercount, threshold, executable):
@@ -89,5 +100,8 @@ def main(sleeptime):
             print(exception)
             pass
         time.sleep(sleeptime)
+
+
+
 if __name__ == '__main__':
     main(sleeptime)
