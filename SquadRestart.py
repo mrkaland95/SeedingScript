@@ -110,7 +110,6 @@ def main(sleeptime):
             current_time = now.strftime("%H:%M")
             player_count = playercount(address)
             print(current_time + "  --  Currently %d players on the server" % player_count)
-            print(buttoninput)
             choicetoexecute(userinput, player_count, seedingThreshold, gameexecutable)
         except Exception as exception:
             print(exception)
