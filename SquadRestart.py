@@ -1,30 +1,21 @@
 import os, time, a2s, sys
 import datetime
-import tkinter
-import tkMessagebox
+from tkinter import *
 
-
-
-
-
-shutdownbutton = Tkinter.Button()
 sleeptime = 60  # How often the script will query the server, meausured in seconds.
 seedingThreshold = 45  # The critical player threshold at which the chosen action will be taken.
 address = ("r2f.tacticaltriggernometry.com", 27165)
 gameexecutable = "SquadGame.exe"
 
 
-close = tk.Button(frame,
-                   text="close",
-                   fg="red",
-                   command=
-button.pack(side=tk.LEFT)
-shutdown = tk.Button(frame,
-                   text="shutdown",
-                     fg="red",
-                   command=shutdown
-slogan.pack(side=tk.LEFT)
-
+def GUI():
+    """
+    Initiates the GUI
+    :return:
+    """
+    top = Tk()
+    top.geometry("300x200")
+    window = Label(top, text="SeedingScript")
 
 
 def gameclose(playercount, threshold, executable):
@@ -37,6 +28,17 @@ def gameclose(playercount, threshold, executable):
     return
 
 
+def shutdown(playercount, threshold):
+    """
+    Shuts down the computer upon hitting the desired threshold
+    :param playercount:
+    :param threshold:
+    :return:
+    """
+    if playercount >= threshold:
+        print("Shutting down the computer")
+        os.system("shutdown /s /t 1")
+    return
 
 
 def playercount(server):
@@ -54,57 +56,31 @@ def playercount(server):
 
 
 
-
-
-def shutdown(playercount, threshold):
+def argstaken():
     """
-    Shuts down the computer upon hitting the desired threshold
-    :param playercount:
-    :param threshold:
+    Checks if there were any arguments supplied from the command line, if applicable
     :return:
     """
-    if playercount >= threshold:
-        print("Shutting down the computer")
-        os.system("shutdown /s /t 1")
-    return
-
-
-
-
-
-
-
-
-def argstaken():
     try:
         args = sys.argv[1:][0]
         if args != "":
-            return
-    except IndexError: # The program will throw an indexerror if no arguments were supplied on start.
-        pass
+            return args
+    except IndexError:  # The program will throw an indexerror if no arguments were supplied on start.
+        return False
 
 
 
-def main(sleeptime, treshold):
+def main(sleeptime):
+
     while True:
         try:
-            playercount()
+            now = datetime.datetime.now()
+            current_time = now.strftime("%H:%M")
             print(current_time + "  --  Currently %d players on the server" % playercount)
-            if playercount >= treshold:
-                if userChoice.lower() in validInputs[1]:
-                    print("Shutting down the computer")
-                    os.system("shutdown /s /t 1")
-                    break
-                elif userChoice.lower() in validInputs[0]:
-                    print("Closing down the game")
-                    os.system("TASKKILL /F /IM %s" % gameexecutable)
-                    break
         except Exception:
             pass
         time.sleep(sleeptime)
 
 
-
-
 if __name__ == '__main__':
-    main(sleeptime, seedingThreshold)
+    main(sleeptime)
