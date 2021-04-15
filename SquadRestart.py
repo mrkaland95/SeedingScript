@@ -27,8 +27,9 @@ class GUI():
             self.root.destroy()
 
         self.root = Tk()
-        button1 = Button(self.root, text="Shutdown computer", padx=30,pady=50,command=shutdownbutton)
-        button2 = Button(self.root, text="Close down game     ",padx=30,pady=50,command=gameclosebutton)
+        self.root.title("Seeding script")
+        button1 = Button(self.root, text="Shutdown the computer upon reaching the threshold", padx=31,pady=50,command=shutdownbutton)
+        button2 = Button(self.root, text="Close down the game upon reaching the threshold     ",padx=30,pady=50,command=gameclosebutton)
         button1.grid(row=1, column=0)
         button2.grid(row=2, column=0)
         window = Label(self.root, text="SeedingScript")
