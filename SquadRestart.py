@@ -1,14 +1,16 @@
 import os, time, a2s, sys
 import datetime
 import subprocess
+import webbrowser
 from tkinter import *
 
 
-sleeptime = 60  # How often the script will query the server, measured in seconds.
-seedingThreshold = 50  # The critical player threshold at which the chosen action will be taken.
+sleeptime = 60  # Default time between queries to the server
+seedingThreshold = 50  # Default seeding threshold
 address = ("r2f.tacticaltriggernometry.com", 27165)
 gameexecutable = "SquadGame.exe"
 userinput = ""
+squadinstall = "C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe"
 
 
 
@@ -43,6 +45,18 @@ class GUI():
 
 
 
+def gameopen(game):
+    webbrowser.open('steam://rungameid/{}'.format(game['appid']))
+
+
+def process_running(executable):
+    call = 'TASKLIST', '/FI', 'imagename eq %s' % executable
+    # use buildin check_output right away
+    output = subprocess.check_output(call).decode()
+    # check in last line for process name
+    last_line = output.strip().split('\r\n')[-1]
+    # because Fail message could be translated
+    return last_line.lower().startswith(executable.lower())
 
 
 
@@ -133,13 +147,19 @@ def main(sleeptime):
         userinput = buttoninput
     else:
         userinput = argumentsupplied
+    try:
+        if not process_running(gameexecutable):
+            subprocess.run(squadinstall)
+    except Exception as error:
+        print(error)
+        pass
     while True:
         try:
             now = datetime.datetime.now()
             current_time = now.strftime("%H:%M")
             player_count = playercount(address)
-            #print(seedingThreshold)
-            print(current_time + "  --  Currently %d players on the server" % player_count)
+            print(f"Threshold is {seedingThreshold}")
+            print(f" {current_time}  -- There are currently {player_count} players on the server")
             choicetoexecute(userinput, player_count, seedingThreshold, gameexecutable)
         except Exception as error:
             print(error)
