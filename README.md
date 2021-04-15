@@ -1,16 +1,4 @@
 # SeedingScript
-Script for shutting down the game/PC when the server population is high enough
+SeedingScript v2.0 
 
-To run, you must install the python interpreter.
-
-https://www.python.org/downloads/
-
-
-
-Once installed, search for CMD in windows, and input the following command
-
-"pip3 install python-a2s"
-
-At that point, all you have to do is to simply double click the file, choose which command you want to run, either "close" or "shutdown".
-
-
+Now includes a GUI/some buttons for choosing which option you want to execute. Also compiled into an executable so you won't need the python interpreter and the dependencies downloaded. To use, simply enter the "dist" folder and download the "squadrestart.exe" file
