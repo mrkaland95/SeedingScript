@@ -1,13 +1,22 @@
 import os, time, a2s, sys
 import datetime
+import shutil
 import subprocess
 import random
 import configparser
+from pathlib import Path
 from tkinter import *
 
 
 userinput = ""
 
+
+class MultiOrderedDict(OrderedDict):
+    def __setitem__(self, key, value):
+        if isinstance(value, list) and key in self:
+            self[key].extend(value)
+        else:
+            super().__setitem__(key, value)
 
 
 class GUI():
@@ -41,31 +50,74 @@ class GUI():
         window.mainloop()
 
 
+
+def backupcreator():
+    config = configparser.ConfigParser()
+    config.read("seedingconfig.ini")
+    original_path = Path(config['OTHER']['game_config_path'])
+    backup_path = original_path / "Backup/"
+    original_config_file = original_path / "GameUserSettings.ini"
+    seeding_config_file = backup_path / "GameUserSettingsSeeding.ini"
+    backup_config_file = backup_path / "GameUserSettingsBackup.ini"
+
+
+    if not os.path.exists(backup_path):
+        try:
+            os.mkdir(backup_path)
+        except FileExistsError:
+            pass
+        print("Backup directory succesfully initialized")
+        shutil.copyfile(original_config_file, seeding_config_file)
+        shutil.copyfile(original_config_file, backup_config_file)
+        seedingparser = configparser.ConfigParser(dict_type=MultiOrderedDict, strict=False)
+        seedingparser.optionxform = str
+        seeding_config_file = str(seeding_config_file)
+        seedingparser.read(seeding_config_file)
+        mainsection = seedingparser['/Script/Squad.SQGameUserSettings']
+        mainsection['ResolutionSizeX'] = "1024"
+        mainsection['ResolutionSizeY'] = "768"
+        mainsection['FullscreenMode'] = "0"
+        mainsection['FrameRateLimit'] = "20.000000"
+        mainsection['MasterVolume'] = "0.00000"
+        mainsection['MenuFrameRateLimit'] = "30.00000"
+        with open(seeding_config_file, "w") as configf:
+            seedingparser.write(configf)
+    shutil.copyfile(seeding_config_file, original_config_file)
+    print("Lightweight seeding settings applied")
+
+
+
+
+
 def confighandler(configfile_name):
     """
     Checks if the config file exists, if not, it will create it with the default settings.
     Afterwards, returns the values needed from the config file.
     """
     config = configparser.ConfigParser()
-    if not os.path.isfile(configfile_name): # checks if the config file exists
+    if not os.path.isfile(configfile_name): # checks if the config file exists'
+        username = os.environ['USERPROFILE']
+        path = Path(f"{username}/AppData/Local/SquadGame/Saved/Config/WindowsNoEditor/") # Hopefully the currents user
+        # hopefully default path to the game's config file
+
+
+
         config['SETTINGS'] = {'seeding_threshold': '60',
                              'server_address': 'r2f.tacticaltriggernometry.com',
                              'port': '27165',
                              'sleep_interval': '60',
-                             'seeding_random': 'False'}
+                             'seeding_random': 'false',
+                             'lightweight_seeding_settings': 'false'}
         config['OTHER'] = {'game_executable' : 'SquadGame.exe',
-                           'squad_install': 'C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe'}
+                           'squad_install': 'C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe',
+                           'game_config_path': path}
         with open("seedingconfig.ini", "w") as configfile:
             config.write(configfile)
     config.read("Seedingconfig.ini")
+    print(config['OTHER']['game_config_path'])
     return config['SETTINGS']['seeding_threshold'], (config['SETTINGS']["server_address"], int(config['SETTINGS']['port'])),\
             config['SETTINGS']['sleep_interval'], config['OTHER']['game_executable'], config['OTHER']['squad_install'],config['SETTINGS']['seeding_random']
 
-
-def settingsswap(gamepath):
-    """
-    Function for replacing settings file for seeding and normal
-    """
 
 
 def process_running(executable):
