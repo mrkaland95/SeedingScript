@@ -1,37 +1,25 @@
 import os, time, a2s, sys
 import datetime
 import subprocess
-import webbrowser
 import random
 import configparser
 from tkinter import *
 
-configname = "seedingconfig.ini"
 
-
-
-
-
-sleeptime = 60  # Default time between queries to the server
-seedingThreshold = 50  # Default seeding threshold
-address = ("r2f.tacticaltriggernometry.com", 27165)
-gameexecutable = "SquadGame.exe"
 userinput = ""
-squadinstall = "C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe"
-
 
 
 
 class GUI():
     def __init__(self):
         def shutdownbutton():
-            global buttoninput # Stupid as hell, but seems it had to done this way to make the button change a variable
+            global buttoninput  # Stupid as hell, but seems it had to done this way to make the button change a variable
             buttoninput = "shutdown"
             print("Your computer will be shut down upon reaching the seeding threshold")
             closeGUI(self)
 
         def gameclosebutton():
-            global buttoninput # Stupid as hell, but seems it had to done this way to make the button change a variable
+            global buttoninput  # Stupid as hell, but seems it had to done this way to make the button change a variable
             buttoninput = "close"
             print("The game will be closed upon hitting the seeding threshold")
             closeGUI(self)
@@ -42,38 +30,36 @@ class GUI():
         self.root = Tk()
         self.root.title("Seeding script")
         shutdownbutton = Button(
-            self.root, text="Shutdown the computer upon reaching the threshold", padx=31,pady=50,command=shutdownbutton)
+            self.root, text="Shutdown the computer upon reaching the threshold", padx=31, pady=50,
+            command=shutdownbutton)
         closebutton = Button(
-            self.root, text="Close down the game upon reaching the threshold     ",padx=30,pady=50,command=gameclosebutton)
+            self.root, text="Close down the game upon reaching the threshold     ", padx=30, pady=50,
+            command=gameclosebutton)
         shutdownbutton.grid(row=1, column=0)
         closebutton.grid(row=2, column=0)
         window = Label(self.root)
         window.mainloop()
 
 
-
-def confighandler():
+def confighandler(configfile_name):
     """
     Checks if the config file exists, if not, it will create it with the default settings.
+    Afterwards, returns the values needed from the config file.
     """
-    configfile_name = "Seedingconfig.ini"
+    config = configparser.ConfigParser()
     if not os.path.isfile(configfile_name): # checks if the config file exists
-        config = configparser.ConfigParser()
         config['SETTINGS'] = {'seeding_threshold': '60',
-                             'server_address': '"r2f.tacticaltriggernometry.com"',
+                             'server_address': 'r2f.tacticaltriggernometry.com',
                              'port': '27165',
-                             'sleep_interval': '60'}
-        config['OTHER'] = {'game_executable' : 'SquadGame.exe' ,
-                           'squad_install': "'C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe'"}
+                             'sleep_interval': '60',
+                             'seeding_random': 'False'}
+        config['OTHER'] = {'game_executable' : 'SquadGame.exe',
+                           'squad_install': 'C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe'}
         with open("seedingconfig.ini", "w") as configfile:
             config.write(configfile)
-    else:
-        config = configparser.ConfigParser()
-        config.read("Seedingconfig.ini")
-        print(config['server_address'])
-
-
-
+    config.read("Seedingconfig.ini")
+    return config['SETTINGS']['seeding_threshold'], (config['SETTINGS']["server_address"], int(config['SETTINGS']['port'])),\
+            config['SETTINGS']['sleep_interval'], config['OTHER']['game_executable'], config['OTHER']['squad_install'],config['SETTINGS']['seeding_random']
 
 
 def settingsswap(gamepath):
@@ -82,24 +68,10 @@ def settingsswap(gamepath):
     """
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-#def gameopen(game):
- #   webbrowser.open('steam://rungameid/{}'.format(game['appid']))
-
-
 def process_running(executable):
+    """
+    Checks if the game is already running, returns a boolean.
+    """
     call = 'TASKLIST', '/FI', f'imagename eq {executable}'
     # use buildin check_output right away
     output = subprocess.check_output(call).decode()
@@ -109,14 +81,11 @@ def process_running(executable):
     return last_line.lower().startswith(executable.lower())
 
 
-
 def choicetoexecute(userchoice=str, playercount=int, threshold=int, executable=str):
     if userchoice == "close":
         gameclose(playercount, threshold, executable)
     elif userchoice == "shutdown":
         shutdown(playercount, threshold)
-
-
 
 
 def gameclose(playercount=int, threshold=int, executable=str):
@@ -156,27 +125,25 @@ def playercount(server):
     return len(players)
 
 
-
 def seedingtresholdargument(threshold):
     # Redefines the seeding threshold, if applicable
     global seedingThreshold
     seedingThreshold = threshold
 
+
 def gameexecuteableargument(executable):
-    global gameexecutable
-    gameexecutable = executable
+    global game_executable
+    game_executable = executable
 
 
-def ifseedingthresholdsupplied(input_arguments):
-    try:
-        seedingtresholdargument(int(input_arguments[1]))
-        gameexecuteableargument(input_arguments[2])
-        return True
-    except Exception:
-        print("Optional arguments were not supplied")
-        return False
-
-
+#def ifseedingthresholdsupplied(input_arguments):
+ #   try:
+  #      seedingtresholdargument(int(input_arguments[1]))
+   #     gameexecuteableargument(input_arguments[2])
+    #    return True
+   # except Exception:
+    #    print("Optional arguments were not supplied")
+     #   return False
 
 
 def commandhandler():
@@ -189,32 +156,32 @@ def commandhandler():
         if "close" in arguments:
             for args in arguments:
                 print(args)
-            ifseedingthresholdsupplied(arguments)
+            #ifseedingthresholdsupplied(arguments)
             return arguments[0]
-        #elif "shutdown" in arguments:
+        # elif "shutdown" in arguments:
         else:
             raise Exception("Your first argument must be either 'close' or 'shutdown'")
 
-    except IndexError:  # The program will throw an indexerror if no arguments were supplied on start.
-        return False # This essentially handles the case where there no arguments supplied
+    except IndexError:  # The program will throw an Indexerror if no arguments were supplied on start.
+        return False  # This essentially handles the case where there no arguments supplied
 
 
-
-def main(sleeptime=60, seeding_threshold=50, seeding_random = True):
-    #seeding_threshold_supplied = ifseedingthresholdsupplied(argume)
+def main(seeding_random=True):
+    configfile_name = "Seedingconfig.ini"
+    seeding_threshold, address, sleep_interval, game_executable, squad_path, seeding_random = confighandler(configfile_name)
     if seeding_random: #seeding_threshold_supplied:
         seeding_threshold = random.randint(45, 98)
-    argumentsupplied  = commandhandler()
+    argumentsupplied  = False #commandhandler()
     if not argumentsupplied:
-        GUI() # Creates the gui .object and runs it. Terminates upon button click
+        GUI() # Creates the gui object and runs it. Terminates upon button click
         userinput = buttoninput
     else:
         userinput = argumentsupplied
     try:
-        if not process_running(gameexecutable):
-            subprocess.run(squadinstall)
-    except Exception as error:
-        print(error)
+        if not process_running(game_executable):
+            subprocess.run(squad_path)
+    except Exception as error: # Will happen if the game is not already running. This just tells the program
+        print(error)           # to carry on if that's the case.
         pass
     print(f"Threshold is {seeding_threshold}")
     while True:
@@ -223,13 +190,11 @@ def main(sleeptime=60, seeding_threshold=50, seeding_random = True):
             current_time = now.strftime("%H:%M")
             player_count = playercount(address)
             print(f" {current_time}  -- There are currently {player_count} players on the server")
-            choicetoexecute(userinput, player_count, seeding_threshold, gameexecutable)
+            choicetoexecute(userinput, player_count, int(seeding_threshold), game_executable)
         except Exception as error:
             print(error)
             pass
-        time.sleep(sleeptime)
-
-
+        time.sleep(int(sleep_interval))
 
 if __name__ == '__main__':
-    main(sleeptime)
+    main()
