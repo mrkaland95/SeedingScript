@@ -3,7 +3,7 @@
 Script for shutting down the game/PC when the server population is high enough, and automatically launch the game when the chosen action is taken(close or shutdown)
 
 Source code is in the "SeedingScript.py" file.
-To run, simply download and run the file called "SeedingScript.exe".
+To run, simply download and run the file called "SeedingScript v2.0.exe".
 
 On startup, a config file will be initialized, where the script will pull some adjustable options. This config file will be created in the same folder as the script was launched from, and if the script is moved, the config file should be moved with it, otherwise a new config file will be initialized.
 The config file contains some adjustable parameters, like what player count your chosen action will activate at. By default this is set to 60. Other options include the interval at which the server will be queried. Generally don't touch this, but the option is there.
