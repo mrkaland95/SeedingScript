@@ -1,15 +1,15 @@
-import a2s
 import configparser
 import datetime
 import os
 import random
 import shutil
 import subprocess
-import sys
 import time
 from collections import OrderedDict
 from pathlib import Path
 from tkinter import *
+
+import a2s
 
 
 # TODO: Make variable and function names consistent, remove redundant code
