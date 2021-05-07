@@ -1,13 +1,12 @@
-import os, time, a2s, sys
+import os, time, a2s
 import datetime
 import shutil
 import subprocess
 import random
 import configparser
+from collections import OrderedDict
 from pathlib import Path
 from tkinter import *
-
-
 userinput = ""
 
 
@@ -26,111 +25,200 @@ class GUI():
             buttoninput = "shutdown"
             print("Your computer will be shut down upon reaching the seeding threshold")
             closeGUI(self)
-
         def gameclosebutton():
             global buttoninput  # Stupid as hell, but seems it had to done this way to make the button change a variable
             buttoninput = "close"
             print("The game will be closed upon hitting the seeding threshold")
             closeGUI(self)
-
+        def restore_last_settingsf():
+            restore_last_used_settings()
+            print('Last used config settings have been restored')
+        def restore_original_settingsf():
+            restore_original_settings()
+            print('Original config settings have been restored')
         def closeGUI(self):
             self.root.destroy()
-
         self.root = Tk()
         self.root.title("Seeding script")
         shutdownbutton = Button(
-            self.root, text="Shutdown the computer upon reaching the threshold", padx=31, pady=50,
+            self.root, text="Shutdown the computer upon reaching the threshold", padx=30, pady=30,
             command=shutdownbutton)
         closebutton = Button(
-            self.root, text="Close down the game upon reaching the threshold     ", padx=30, pady=50,
+            self.root, text="Close down the game upon reaching the threshold     ", padx=30, pady=30,
             command=gameclosebutton)
-        shutdownbutton.grid(row=1, column=0)
-        closebutton.grid(row=2, column=0)
-        window = Label(self.root)
+        restore_last_settings_button = Button(
+            self.root, text="Restore last settings", command=restore_last_settingsf
+        )
+        restore_original_settings_button = Button(
+            self.root, text="Restore original settings", command=restore_original_settingsf
+        )
+        restore_last_settings_button.grid(row=1, ipady=10, sticky=NW, ipadx=25, pady=20)
+        restore_original_settings_button.grid(row=1, ipady=10, sticky=NE, ipadx=25, pady=20)
+        shutdownbutton.grid(row=2, column=0)
+        closebutton.grid(row=3, column=0)
+        toptext = "Use these buttons to restore your settings if the program didn't close properly\n" \
+                  "the last time it was ran, for example if it was manually closed. \n" \
+                  "These buttons will allow you to restore your settings from either the last time\n" \
+                  "the program was started(to any point beyond the GUI)\n" \
+                  "The other option restores the settings you had in the game at the time this program was run for the first time"
+        text = Text(self.root, width=60, height=7, font=("Helvetica", 9))
+        text.insert(INSERT, toptext)
+        text.grid(row=0)
+        window = Label(self.root, text=toptext)
         window.mainloop()
 
 
-
-def backupcreator():
+def initialize_game_config():
     config = configparser.ConfigParser()
     config.read("seedingconfig.ini")
     original_path = Path(config['OTHER']['game_config_path'])
     backup_path = original_path / "Backup/"
     original_config_file = original_path / "GameUserSettings.ini"
-    seeding_config_file = backup_path / "GameUserSettingsSeeding.ini"
-    backup_config_file = backup_path / "GameUserSettingsBackup.ini"
-
-
+    on_startup_file = backup_path / "GameUserSettingsCurrent.ini"
+    seeding_settings_swap_file = backup_path / "GameUserSettingsSwap.ini"
+    backup_config_file = backup_path / "GameUserSettingsBackupOfOriginal.ini"
+    # The path is stored as an object, so needs to be converted back to a string.
     if not os.path.exists(backup_path):
         try:
             os.mkdir(backup_path)
         except FileExistsError:
             pass
         print("Backup directory succesfully initialized")
-        shutil.copyfile(original_config_file, seeding_config_file)
+        shutil.copyfile(original_config_file, on_startup_file)
+        shutil.copyfile(original_config_file, seeding_settings_swap_file)
         shutil.copyfile(original_config_file, backup_config_file)
         seedingparser = configparser.ConfigParser(dict_type=MultiOrderedDict, strict=False)
         seedingparser.optionxform = str
-        seeding_config_file = str(seeding_config_file)
-        seedingparser.read(seeding_config_file)
+        seedingparser.read(seeding_settings_swap_file)
         mainsection = seedingparser['/Script/Squad.SQGameUserSettings']
-        mainsection['ResolutionSizeX'] = "1024"
-        mainsection['ResolutionSizeY'] = "768"
-        mainsection['FullscreenMode'] = "0"
+        mainsection['ResolutionSizeX'] = "1280"
+        mainsection['ResolutionSizeY'] = "720"
+        mainsection['FullscreenMode'] = "2"
         mainsection['FrameRateLimit'] = "20.000000"
         mainsection['MasterVolume'] = "0.00000"
         mainsection['MenuFrameRateLimit'] = "30.00000"
-        with open(seeding_config_file, "w") as configf:
+        mainsection['ScreenPercentage'] = "75"
+        with open(seeding_settings_swap_file, "w") as configf:
             seedingparser.write(configf)
-    shutil.copyfile(seeding_config_file, original_config_file)
+        return
+
+def apply_seeding_settings():
+    config = configparser.ConfigParser()
+    config.read("seedingconfig.ini")
+    original_path = Path(config['OTHER']['game_config_path'])
+    backup_path = original_path / "Backup/"
+    original_config_file = original_path / "GameUserSettings.ini"
+    on_startup_file = backup_path / "GameUserSettingsCurrent.ini"
+    swap_config_file = backup_path / "GameUserSettingsSwap.ini"
+    swap_config_file = str(swap_config_file)
+    shutil.copyfile(original_config_file, on_startup_file)
+    shutil.copyfile(swap_config_file, original_config_file)
     print("Lightweight seeding settings applied")
+    return
 
 
 
-
-
-def confighandler(configfile_name):
+def config_handler(configfile_name):
     """
     Checks if the config file exists, if not, it will create it with the default settings.
     Afterwards, returns the values needed from the config file.
     """
     config = configparser.ConfigParser()
-    if not os.path.isfile(configfile_name): # checks if the config file exists'
+    if not os.path.isfile(configfile_name):  # checks if the config file exists'
         username = os.environ['USERPROFILE']
-        path = Path(f"{username}/AppData/Local/SquadGame/Saved/Config/WindowsNoEditor/") # Hopefully the currents user
-        # hopefully default path to the game's config file
-
-
-
+        path = Path(f"{username}/AppData/Local/SquadGame/Saved/Config/WindowsNoEditor/")
+        # hopefully default path to the game's config file. Worked for my own PCs so far.
+        print("Initializing config file. This will be created in the same folder as you ran the program from. It will create a new one if it can't be found in the same folder as the program")
         config['SETTINGS'] = {'seeding_threshold': '60',
-                             'server_address': 'r2f.tacticaltriggernometry.com',
-                             'port': '27165',
-                             'sleep_interval': '60',
-                             'seeding_random': 'false',
-                             'lightweight_seeding_settings': 'false'}
-        config['OTHER'] = {'game_executable' : 'SquadGame.exe',
+        '; The Threshold where the action you chosen will be taken, i.e when the game will be shut down or the pc shut down. \n'
+        "\n"
+        'server_address': 'r2f.tacticaltriggernometry.com',
+        "; The server's address. Generally don't touch, but can be changed if we get a new host.\n"
+        "\n"
+        'port': '27165',
+        "; Same as before, generally don't touch.\n"
+        "\n"
+        'sleep_interval': '60',
+        "; Determines how often the program will query the server, in seconds.\n"
+        "\n"
+        'seeding_random': 'false',
+        "; This determines whether a random integer between 48 and 98 will be used for the the chosen action.\n"
+        "; I put this here just to make the spread of when people leave a little wider, "
+        "but not necessary\n"
+        "\n"
+        'lightweight_seeding_settings': 'false\n' +
+        "; Currently a bit experimental. Essentially this determines whether lightweight seeding settings\n"
+        "; will be applied when the game starts. Will for example apply a 20 FPS frame limit, and turn master volume to 0, amongst other things.\n"
+        "; the program should be able to your path to your config file automatically.\n"
+        "; However, if you choose to use this, i highly recommend you create a backup of your\n"
+        "; 'GameUserSettings.ini' file. One will also be created upon initilization, but create one manually just to be safe.\n"
+        "; Things can break if the program is closed manually, trying to figure out a way to remedy this.\n"
+        "\n"}
+
+        config['OTHER'] = {'game_executable': 'SquadGame.exe',
                            'squad_install': 'C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe',
-                           'game_config_path': path}
+                                            '; The install path to the game, replace this if applicable\n'
+                                            "; Make sure to include 'squad_launcher.exe' at the end of the path.\n"
+                           "\n"
+                           'game_config_path': f"{path}\n"
+                           "; The path to your config file folder. The program should hopefully be able to find this\n"
+                           "; But change this to the correct one if errors start being thrown.\n"}
         with open("seedingconfig.ini", "w") as configfile:
             config.write(configfile)
     config.read("Seedingconfig.ini")
-    print(config['OTHER']['game_config_path'])
-    return config['SETTINGS']['seeding_threshold'], (config['SETTINGS']["server_address"], int(config['SETTINGS']['port'])),\
-            config['SETTINGS']['sleep_interval'], config['OTHER']['game_executable'], config['OTHER']['squad_install'],config['SETTINGS']['seeding_random']
+    return int(config['SETTINGS']['seeding_threshold']), (
+        config['SETTINGS']["server_address"], int(config['SETTINGS']['port'])), \
+        config['SETTINGS']['sleep_interval'], config['OTHER']['game_executable'], config['OTHER']['squad_install'], \
+        config.getboolean('SETTINGS', 'seeding_random'), config.getboolean('SETTINGS', 'lightweight_seeding_settings')
+
+def restore_last_used_settings():
+    """
+    Restores user's original config file to the game when called
+    :return:
+    """
+    config = configparser.ConfigParser()
+    config.read("seedingconfig.ini")
+    original_path = Path(config['OTHER']['game_config_path'])
+    backup_path = original_path / "Backup/"
+    original_config_file = original_path / "GameUserSettings.ini"
+    backup_config_file = backup_path / "GameUserSettingsCurrent.ini"
+    try:
+        shutil.copyfile(backup_config_file, original_config_file)
+    except Exception as error:
+        print(error)
+
+def restore_original_settings():
+    config = configparser.ConfigParser()
+    config.read("seedingconfig.ini")
+    original_path = Path(config['OTHER']['game_config_path'])
+    backup_path = original_path / "Backup/"
+    original_config_file = original_path / "GameUserSettings.ini"
+    backup_config_file = backup_path / "GameUserSettingsBackupOfOriginal.ini"
+    try:
+        shutil.copyfile(backup_config_file, original_config_file)
+    except Exception as error:
+        print(error)
 
 
 
-def process_running(executable):
+
+def is_process_running(executable):
     """
     Checks if the game is already running, returns a boolean.
     """
     call = 'TASKLIST', '/FI', f'imagename eq {executable}'
     # use buildin check_output right away
-    output = subprocess.check_output(call).decode()
-    # check in last line for process name
-    last_line = output.strip().split('\r\n')[-1]
-    # because Fail message could be translated
-    return last_line.lower().startswith(executable.lower())
+    try:
+        output = subprocess.check_output(call).decode()
+        # check in last line for process name
+        # because Fail message could be translated
+        last_line = output.strip().split('\r\n')[-1]
+        return last_line.lower().startswith(executable.lower())
+    except Exception as error:
+        print(error)
+        print("Something went wrong in finding the process")
+
+
 
 
 def choicetoexecute(userchoice=str, playercount=int, threshold=int, executable=str):
@@ -145,6 +233,11 @@ def gameclose(playercount=int, threshold=int, executable=str):
     Function that shuts down the game when the playercount reaches the critical threshold.
     """
     if playercount >= threshold:
+        try:
+            restore_last_used_settings()
+        except Exception as exception:
+            print(exception)
+            pass
         print("Closing down the game")
         os.system("TASKKILL /F /IM %s" % executable)
         sys.exit()
@@ -158,8 +251,14 @@ def shutdown(playercount, threshold):
     :return:
     """
     if playercount >= threshold:
+        try:
+            restore_last_used_settings()
+        except Exception as exception:
+            print(exception)
+            pass
         print("Shutting down the computer")
         os.system("shutdown /s /t 1")
+
 
 
 def playercount(server):
@@ -177,25 +276,20 @@ def playercount(server):
     return len(players)
 
 
-def seedingtresholdargument(threshold):
-    # Redefines the seeding threshold, if applicable
-    global seedingThreshold
-    seedingThreshold = threshold
 
 
-def gameexecuteableargument(executable):
-    global game_executable
-    game_executable = executable
 
 
-#def ifseedingthresholdsupplied(input_arguments):
- #   try:
-  #      seedingtresholdargument(int(input_arguments[1]))
-   #     gameexecuteableargument(input_arguments[2])
-    #    return True
-   # except Exception:
-    #    print("Optional arguments were not supplied")
-     #   return False
+
+
+# def ifseedingthresholdsupplied(input_arguments):
+#   try:
+#      seedingtresholdargument(int(input_arguments[1]))
+#     gameexecuteableargument(input_arguments[2])
+#    return True
+# except Exception:
+#    print("Optional arguments were not supplied")
+#   return False
 
 
 def commandhandler():
@@ -208,7 +302,7 @@ def commandhandler():
         if "close" in arguments:
             for args in arguments:
                 print(args)
-            #ifseedingthresholdsupplied(arguments)
+            # ifseedingthresholdsupplied(arguments)
             return arguments[0]
         # elif "shutdown" in arguments:
         else:
@@ -218,22 +312,31 @@ def commandhandler():
         return False  # This essentially handles the case where there no arguments supplied
 
 
-def main(seeding_random=True):
+if __name__ == '__main__':
+    try:
+        restore_last_used_settings()
+    except Exception:
+        pass
     configfile_name = "Seedingconfig.ini"
-    seeding_threshold, address, sleep_interval, game_executable, squad_path, seeding_random = confighandler(configfile_name)
-    if seeding_random: #seeding_threshold_supplied:
+    seeding_threshold, address, sleep_interval, game_executable, \
+    squad_path, seeding_random, is_seeding_settings_active = config_handler(configfile_name)
+    print(config_handler(configfile_name))
+    if seeding_random:  # seeding_threshold_supplied:
         seeding_threshold = random.randint(45, 98)
-    argumentsupplied  = False #commandhandler()
+    argumentsupplied = False  # commandhandler()
     if not argumentsupplied:
-        GUI() # Creates the gui object and runs it. Terminates upon button click
+        GUI()  # Creates the gui object and runs it. Terminates upon button click
         userinput = buttoninput
     else:
         userinput = argumentsupplied
     try:
-        if not process_running(game_executable):
+        if not is_process_running(game_executable):
+            if is_seeding_settings_active:
+                initialize_game_config()
+                apply_seeding_settings()
             subprocess.run(squad_path)
-    except Exception as error: # Will happen if the game is not already running. This just tells the program
-        print(error)           # to carry on if that's the case.
+    except Exception as error:  # Will happen if the game is not already running. This just tells the program
+        print(error)  # to carry on if that's the case.
         pass
     print(f"Threshold is {seeding_threshold}")
     while True:
@@ -246,7 +349,6 @@ def main(seeding_random=True):
         except Exception as error:
             print(error)
             pass
+        if (not is_process_running(game_executable)) and is_seeding_settings_active:
+            restore_last_used_settings()
         time.sleep(int(sleep_interval))
-
-if __name__ == '__main__':
-    main()
