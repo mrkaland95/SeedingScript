@@ -32,35 +32,55 @@ class GUI:
     """
 
     def __init__(self):
-        def shutdownbutton():
+        def shutdownButton():
             global userinput  # Stupid as hell, but seems it had to done this way to make the button change a variable
             userinput = "shutdown"
             print("Your computer will be shut down upon reaching the seeding threshold")
             closeGUI(self)
 
-        def gameclosebutton():
+        def gameCloseButton():
             global userinput  # Stupid as hell, but seems it had to done this way to make the button change a variable
             userinput = "close"
             print("The game will be closed upon hitting the seeding threshold")
             closeGUI(self)
+
         def closeGUI(self):
             self.root.destroy()
+
         def close_button():
+            restore_last_used_settings()
             sys.exit()
+
+        def restore_original_settings_print():
+            try:
+                restore_last_used_settings
+                print("Last original settings have been restored")
+            except Exception as e:
+                print(e)
+                pass
+
+
+        def restore_last_settings_print():
+            try:
+                restore_last_used_settings()
+                print("Last used settings have been restored")
+            except Exception as e:
+                print(e)
+                pass
 
         self.root = Tk()
         self.root.title("Seeding script")
         shutdownbutton = Button(
             self.root, text="Shutdown the computer upon reaching the threshold", padx=30, pady=30,
-            command=shutdownbutton)
+            command=shutdownButton)
         closebutton = Button(
             self.root, text="Close down the game upon reaching the threshold     ", padx=30, pady=30,
-            command=gameclosebutton)
+            command=gameCloseButton)
         restore_last_settings_button = Button(
-            self.root, text="Restore last used settings", command=restore_last_used_settings
+            self.root, text="Restore last used settings", command=restore_last_settings_print
         )
         restore_original_settings_button = Button(
-            self.root, text="Restore original settings", command=restore_original_settings
+            self.root, text="Restore original settings", command=restore_original_settings_print
         )
         restore_last_settings_button.grid(row=1, ipady=10, sticky=NW, ipadx=25, pady=20)
         restore_original_settings_button.grid(row=1, ipady=10, sticky=NE, ipadx=25, pady=20)
@@ -79,7 +99,7 @@ class GUI:
         window.mainloop()
 
 
-def initialize_game_config():
+def initializeGameSeedingConfig():
     config = configparser.ConfigParser()
     config.read("seedingconfig.ini")
     original_path = Path(config['OTHER']['game_config_path'])
@@ -113,12 +133,13 @@ def initialize_game_config():
         mainsection['MenuFrameRateLimit'] = "30.00000"
         mainsection['ScreenPercentage'] = "75"
 
+
         with open(seeding_settings_swap_file, "w") as configf:
             seedingparser.write(configf)
         return
 
 
-def apply_seeding_settings():
+def applySeedingSettings():
     config = configparser.ConfigParser()
     config.read("seedingconfig.ini")
     original_path = Path(config['OTHER']['game_config_path'])
@@ -157,7 +178,7 @@ def config_handler(configfile_name):
                               'sleep_interval': '60',
                               "; Determines how often the program will query the server, in seconds.\n"
                               "\n"
-                              'seeding_random': 'false',
+                              'is_seeding_random_enabled': 'false',
                               "; This determines whether a random integer between 48 and 98 will be used for the the chosen action.\n"
                               "; I put this here just to make the spread of when people leave a little wider, "
                               "but not necessary. Overrides previous threshold in the file.\n"
@@ -186,7 +207,7 @@ def config_handler(configfile_name):
         int(config['SETTINGS']['seeding_threshold']), (
         config['SETTINGS']["server_address"], int(config['SETTINGS']['port'])), \
         config['SETTINGS']['sleep_interval'], config['OTHER']['game_executable'], config['OTHER']['squad_install'], \
-        config.getboolean('SETTINGS', 'seeding_random'), config.getboolean('SETTINGS', 'lightweight_seeding_settings')
+        config.getboolean('SETTINGS', 'is_seeding_random_enabled'), config.getboolean('SETTINGS', 'lightweight_seeding_settings')
 
 
 
@@ -250,7 +271,7 @@ def choicetoexecute(userchoice=str, playercount=int, threshold=int, executable=s
 
 def gameclose(playercount=int, threshold=int, executable=str):
     """
-    Function that shuts down the game when the server_player_count reaches the critical threshold.
+    Function that shuts down the game when the serverPlayerCount reaches the critical threshold.
     """
     if playercount >= threshold:
         try:
@@ -280,7 +301,7 @@ def shutdown(playercount, threshold):
         os.system("shutdown /s /t 1")
 
 
-def server_player_count(server):
+def serverPlayerCount(server):
     """
     The amount of players that are actively loaded in to the server. Done this way since the attribute of a2s.players
     includes players in queue.
@@ -295,6 +316,45 @@ def server_player_count(server):
     return len(players)
 
 
+def commandHandler():
+    """
+    Checks if there were any arguments supplied from the command line, if applicable
+    :return:
+    """
+    valid_commands=["-shutdown", "-close"]
+    try:
+        global userinput
+        args = sys.argv[1:]
+        # Checks if there were any arguments supplied, if not returns false to userinput, which triggers the GUI
+        args_len = len(args)
+        if args_len == 0:
+            userinput = False
+
+        for argument in args:
+            if argument in valid_commands or argument.startswith("-thrsh"):
+                # Did it this way so only one or the other could be supplied. Whichever argument supplied last will count
+                if argument == "-close":
+                    userinput = "close"
+                elif argument == "-shutdown":
+                    userinput = "shutdown"
+
+                if argument.startswith("-thrsh"):
+                    try:
+                        global user_set_seeding_threshold
+                        thresh = argument[6:]
+                        user_set_seeding_threshold = int(thresh)
+                    except Exception:
+                        print("Error, likely invalid number after 'thrsh' command was put in")
+                        pass
+            else:
+                #
+                raise Exception("No valid arguments were input")
+    except Exception as err:
+        print(err)
+
+
+
+
 # def game_no_longer_running(game_executable):
 
 
@@ -302,15 +362,20 @@ if __name__ == '__main__':
     userinput = ""
     configfile_name = "Seedingconfig.ini"
     user_set_seeding_threshold, address, sleep_interval, game_executable, \
-    squad_game_launcher_path, seeding_random, is_seeding_settings_active = config_handler(configfile_name)
-    if seeding_random:
+    squad_game_launcher_path, is_seeding_random_enabled, is_seeding_settings_active = config_handler(configfile_name)
+
+    #Calls the command handler function to see if any arguments were supplied from commandline, if not runs the GUI
+    commandHandler()
+    if is_seeding_random_enabled:
         user_set_seeding_threshold = random.randint(45, 98)
     try:
-        GUI()
+        if not userinput or (userinput is None):
+            # Initializes an instance of the GUI
+            GUI()
         if not is_process_running(game_executable):
             if is_seeding_settings_active:
-                initialize_game_config()
-                apply_seeding_settings()
+                initializeGameSeedingConfig()
+                applySeedingSettings()
             subprocess.run(squad_game_launcher_path)
     except Exception as error:  # Will happen if the game is not already running. This just tells the program
         print(error)  # to carry on if that's the case.
@@ -320,7 +385,7 @@ if __name__ == '__main__':
         try:
             now = datetime.datetime.now()
             current_time = now.strftime("%H:%M")
-            current_player_count = server_player_count(address)
+            current_player_count = serverPlayerCount(address)
             print(f" {current_time}  -- There are currently {current_player_count} players on the server")
             choicetoexecute(userinput, current_player_count, user_set_seeding_threshold, game_executable)
         except Exception as error:
