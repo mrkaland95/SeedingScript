@@ -35,6 +35,12 @@ def autojoin():
 
 
 
+
+
+
+
+
+
 def buttonLocator():
     browser720p = 'Browser720p_w.png'
     browser1440p = 'Browser1440p.png'
@@ -69,17 +75,38 @@ def configHandler(configfile_name):
     """
     config = configparser.ConfigParser()
     config.read(configfile_name)
-    if not 'join_server_automatically' in config:
-        config.set('SETTINGS', 'join_server_automatically', 'false')
+    if not 'join_server_automatically_enabled' in config:
+        config.set('SETTINGS', 'join_server_automatically_enabled', 'false')
     if not config.has_option('SETTINGS', 'is_seeding_random_enabled'):
         config.set('SETTINGS', 'is_seeding_random_enabled', 'false')
     if not config.has_option('SETTINGS', 'lightweight_seeding_settings'):
         config.set('SETTINGS', 'lightweight_seeding_settings', 'false')
-    if not config.has_option('SETTINGS', 'join_server_automatically'):
-        config.set('SETTINGS', 'join_server_automatically', 'false')
-    with open(configfile_name) as configfile:
+    if not config.has_option('SETTINGS', 'join_server_automatically_enabled'):
+        config.set('SETTINGS', 'join_server_automatically_enabled', 'false')
+    with open(configfile_name, 'w') as configfile:
         config.write(configfile)
 
+
+
+
+
+def configCheckerAndFixer(configfile_name):
+    config = configparser.ConfigParser()
+    config.read(configfile_name)
+    if not config.has_option('SETTINGS', 'is_seeding_random_enabled'):
+        config.set('SETTINGS', 'is_seeding_random_enabled', 'true')
+    if not config.has_option('SETTINGS', 'lightweight_seeding_settings'):
+        config.set('SETTINGS', 'lightweight_seeding_settings', 'false')
+    if not config.has_option('SETTINGS', 'seeding_random_upper_limit'):
+        config.set('SETTINGS', 'seeding_random_upper_limit', '95')
+    if not config.has_option('SETTINGS', 'seeding_random_lower_limit'):
+        config.set('SETTINGS', 'seeding_random_lower_limit', '45')
+    if not config.has_option('SETTINGS', 'join_server_automatically_enabled'):
+        config.set('SETTINGS', 'join_server_automatically_enabled', 'false')
+    if not config.has_option('SETTINGS', 'close_script_if_game_not_running'):
+        config.set('SETTINGS', 'close_script_if_game_not_running', 'true')
+    with open(configfile_name, 'a') as f:
+        config.write(f)
 
 
 
@@ -87,7 +114,12 @@ def configHandler(configfile_name):
 
 if __name__ == '__main__':
     CONFIGFILE_NAME = "seedingconfig.ini"
-    buttonLocator()
+    configCheckerAndFixer(CONFIGFILE_NAME)
+
+
+
+
+    #buttonLocator()
     #screenSizeTest()
     #configRead(CONFIGFILE_NAME)
     #autojoin()

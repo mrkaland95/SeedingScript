@@ -146,7 +146,7 @@ def initializeConfigFile(configfile_name):
         "; 'GameUserSettings.ini' file. One will also be created upon initialization, but create one manually just to be safe.\n"
         "; Things can break if the program is closed manually, trying to figure out a way to remedy this.\n"
         "\n"
-        'join_server_automatically': 'false',
+        'join_server_automatically_enabled': 'false',
         '; This allows you to automatically join the server. Note, this will ONLY work if TT is set to favourite \n'
         '; Aswell as favourites only being activated in the browser.\n'
         '\n'
@@ -154,10 +154,9 @@ def initializeConfigFile(configfile_name):
         '; The delay for how long the program will wait before it tries to join the server\n'
         '; You might want to change this as needed depending on how fast your computer is.\n'
         'close_script_if_game_not_running' : 'true\n'
-        ''
-
-
-                              }
+        '\n'
+        '; Essentially lets you chose if the script will close itself gracefully if the game is found not to be running by the time\n'
+        '; the main loop starts. '}
 
 
 
@@ -168,8 +167,8 @@ def initializeConfigFile(configfile_name):
         "; Make sure to include 'squad_launcher.exe' at the end of the path.\n"
         "\n"
         'game_config_path': f"{path}\n"
-        "; The path to your config file folder. The program should hopefully be able to find this\n"
-        "; But change this to the correct one if errors start being thrown.\n"}
+        "\n; The path to your config file folder. The program should hopefully be able to find this\n"
+        "\n; But change this to the correct one if errors start being thrown.\n"}
         with open(CONFIGFILE_NAME, "w") as configfile:
             config.write(configfile)
         return
@@ -182,11 +181,11 @@ def initializeGameSeedingConfig(configfile_name):
     config = configparser.ConfigParser()
     config.read(configfile_name)
     game_original_config_path = os.path.abspath(config['OTHER']['game_config_path'])
-    backup_path = f'{game_original_config_path}/Backup/'
-    original_config_file = f'{game_original_config_path}/GameUserSettings.ini'
-    on_startup_file = backup_path / "GameUserSettingsLastUsed.ini"
-    seeding_settings_swap_file = backup_path / "GameUserSettingsSwapFile.ini"
-    backup_config_file = backup_path / "GameUserSettingsBackupOfOriginal.ini"
+    backup_path = os.path.abspath(f'{game_original_config_path}\Backup')
+    original_config_file = os.path.abspath(f'{game_original_config_path}\GameUserSettings.ini')
+    on_startup_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
+    seeding_settings_swap_file = os.path.abspath(f'{backup_path}\GameUserSettingsSwapFile.ini')
+    backup_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsBackupOfOriginal.ini')
     # The path is stored as an attribute of an object, so needs to be converted back to a string.
 
 
@@ -219,7 +218,8 @@ def initializeGameSeedingConfig(configfile_name):
         mainsection['LastConfirmedFullscreenMode'] = "2"
         with open(seeding_settings_swap_file, "w") as writefile:
             seedingparser.write(writefile)
-        return
+
+
 
 
 
@@ -227,11 +227,11 @@ def initializeGameSeedingConfig(configfile_name):
 def applySeedingSettings(seeding_script_config):
     config = configparser.ConfigParser()
     config.read(seeding_script_config)
-    original_path = Path(config['OTHER']['game_config_path'])
-    backup_path = original_path / "Backup/"
-    original_config_file = original_path / "GameUserSettings.ini"
-    on_startup_file = backup_path / "GameUserSettingsLastUsed.ini"
-    swap_config_file = backup_path / "GameUserSettingsSwapFile.ini"
+    original_path = os.path.abspath(config['OTHER']['game_config_path'])
+    backup_folder_path = os.path.abspath(f'{original_path}/Backup')
+    original_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
+    on_startup_file = os.path.abspath(f'{backup_folder_path}\GameUserSettingsLastUsed.ini')
+    swap_config_file = os.path.abspath(f'{backup_folder_path}\GameUserSettingsSwapFile.ini')
     swap_config_file = str(swap_config_file)
     compare_file = filecmp.cmp(swap_config_file, on_startup_file)
     try:
@@ -248,6 +248,39 @@ def applySeedingSettings(seeding_script_config):
         print(error)
 
 
+
+
+
+
+
+
+
+
+
+
+def configCheckerAndFixer(configfile_name):
+    config = configparser.ConfigParser()
+    config.read(configfile_name)
+    if not config.has_option('SETTINGS', 'is_seeding_random_enabled'):
+        config.set('SETTINGS', 'is_seeding_random_enabled', 'true')
+    if not config.has_option('SETTINGS', 'lightweight_seeding_settings'):
+        config.set('SETTINGS', 'lightweight_seeding_settings', 'false')
+    if not config.has_option('SETTINGS', 'seeding_random_upper_limit'):
+        config.set('SETTINGS', 'seeding_random_upper_limit', '95')
+    if not config.has_option('SETTINGS', 'seeding_random_lower_limit'):
+        config.set('SETTINGS', 'seeding_random_lower_limit', '45')
+    if not config.has_option('SETTINGS', 'join_server_automatically_enabled'):
+        config.set('SETTINGS', 'join_server_automatically_enabled', 'false')
+    if not config.has_option('SETTINGS', 'close_script_if_game_not_running'):
+        config.set('SETTINGS', 'close_script_if_game_not_running', 'true')
+    with open(configfile_name, 'ab') as f:
+        config.write(f)
+
+
+
+
+
+
 def configRead(configfile_name):
     """
     Checks if the config file exists, if not, it will create it with the default settings.
@@ -256,12 +289,16 @@ def configRead(configfile_name):
     config = configparser.ConfigParser()
     config.read(configfile_name)
     return\
-        int(config['SETTINGS']['seeding_threshold']), (
-        config['SETTINGS']["server_address"], int(config['SETTINGS']['port'])), \
-        config['SETTINGS']['sleep_interval'], config['OTHER']['game_executable'], config['OTHER']['squad_install'],\
-        config.getboolean('SETTINGS', 'is_seeding_random_enabled'), config.getboolean('SETTINGS', 'lightweight_seeding_settings'),\
-        int(config['SETTINGS']['seeding_random_upper_limit']), int(config['SETTINGS']['seeding_random_lower_limit']),\
-        config.getboolean('SETTINGS', 'join_server_automatically'), config.getboolean('SETTINGS', 'game_start_to_button_click_delay'),\
+        int(config['SETTINGS']['seeding_threshold']),\
+        (config['SETTINGS']["server_address"], int(config['SETTINGS']['port'])), \
+        config['SETTINGS']['sleep_interval'], config['OTHER']['game_executable'],\
+        config['OTHER']['squad_install'],\
+        config.getboolean('SETTINGS', 'is_seeding_random_enabled'),\
+        config.getboolean('SETTINGS', 'lightweight_seeding_settings'),\
+        int(config['SETTINGS']['seeding_random_upper_limit']), \
+        int(config['SETTINGS']['seeding_random_lower_limit']), \
+        int(config['SETTINGS']['game_start_to_button_click_delay']), \
+        config.getboolean('SETTINGS', 'join_server_automatically_enabled'), \
         config.getboolean('SETTINGS', 'close_script_if_game_not_running')
 
 
@@ -274,10 +311,10 @@ def restoreLastUsedSettings(seeding_script_config):
     """
     config = configparser.ConfigParser()
     config.read(seeding_script_config)
-    original_path = Path(config['OTHER']['game_config_path'])
-    backup_path = original_path / "Backup/"
-    current_active_config_file = original_path / "GameUserSettings.ini"
-    last_used_config_file = backup_path / "GameUserSettingsLastUsed.ini"
+    original_path = os.path.abspath(config['OTHER']['game_config_path'])
+    backup_path = os.path.abspath(f'{original_path}\Backup')
+    current_active_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
+    last_used_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
     compare_file = filecmp.cmp(last_used_config_file, current_active_config_file)
     try:
         if not compare_file:
@@ -291,10 +328,10 @@ def restoreLastUsedSettings(seeding_script_config):
 def restoreOriginalSettings(seeding_script_config):
     config = configparser.ConfigParser()
     config.read(seeding_script_config)
-    original_path = Path(config['OTHER']['game_config_path'])
-    backup_path = original_path / "Backup/"
-    original_config_file = original_path / "GameUserSettings.ini"
-    backup_config_file = backup_path / "GameUserSettingsBackupOfOriginal.ini"
+    original_path = os.path.abspath(config['OTHER']['game_config_path'])
+    backup_path = os.path.abspath(f'{original_path}\Backup')
+    original_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
+    backup_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsBackupOfOriginal.ini')
     try:
         shutil.copyfile(backup_config_file, original_config_file)
     except Exception as error:
@@ -475,23 +512,31 @@ if __name__ == '__main__':
     CONFIGFILE_NAME = "seedingconfig.ini"
     # ALTERNATIVE_CONFIGFILE = os.path.abspath("C:\Users\Steffen\AppData\Local\Seedingscript\seedingscript.ini")
     close_script_if_game_not_running = True
-    automatic_join = True
-    game_start_to_button_click_delay = 45
+    join_server_automatically_enabled = True
+    initializeConfigFile(CONFIGFILE_NAME)
+
+
+    user_set_seeding_threshold, \
+    address, \
+    sleep_interval, \
+    game_executable, \
+    squad_game_launcher_path, \
+    is_seeding_random_enabled, \
+    is_seeding_settings_active, \
+    seeding_random_lower, \
+    seeding_random_upper, \
+    game_start_to_button_click_delay, \
+    join_server_automatically_enabled, \
+    close_script_if_game_not_running = configRead(CONFIGFILE_NAME)
 
 
 
-
-
-    user_set_seeding_threshold, address, sleep_interval, game_executable, \
-    squad_game_launcher_path, is_seeding_random_enabled, is_seeding_settings_active, seeding_rand_lower,\
-    seeding_rand_upper, join_server_automatically,\
-    game_start_to_button_click_delay, close_script_if_game_not_running = configRead(CONFIGFILE_NAME)
 
     if is_seeding_random_enabled:
-        user_set_seeding_threshold = random.randint(seeding_rand_lower, seeding_rand_upper)
-
-
+        user_set_seeding_threshold = random.randint(seeding_random_lower, seeding_random_upper)
     try:
+        if is_seeding_settings_active:
+            initializeGameSeedingConfig(CONFIGFILE_NAME)
         # Calls the command handler function to see if any arguments were supplied from commandline, if not runs the GUI
         cmdlineArgumentHandler()
         if userinput is None:
@@ -504,16 +549,14 @@ if __name__ == '__main__':
     except Exception as error:  # Will happen if the game is not already running. This just tells the program
         print(error)  # to carry on if that's the case.
         pass
-    if is_seeding_random_enabled:
-        user_set_seeding_threshold = random.randint(seeding_rand_lower, seeding_rand_upper)
-
-
     print(f"Your activation threshold is:  {user_set_seeding_threshold}")
     if is_seeding_settings_active:
-        time.sleep(5)
+        time.sleep(10)
         restoreLastUsedSettings(CONFIGFILE_NAME)
+    # Essentially how long the program waits between the game starting and when it will try and locate the server.
     time.sleep(game_start_to_button_click_delay)
-    buttonLocator()
+    if join_server_automatically_enabled:
+        buttonLocator()
     while True:
         try:
             if close_script_if_game_not_running:
