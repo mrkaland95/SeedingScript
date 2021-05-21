@@ -130,15 +130,14 @@ def initializeConfigFile(configfile_name):
         'sleep_interval': '60',
         "; Determines how often the program will query the server, in seconds.\n"
         "\n"
-        'is_seeding_random_enabled': 'false',
+        'is_seeding_random_enabled': 'true',
         "; This determines whether a random integer between 48 and 98 will be used for the the chosen action.\n"
         "; I put this here just to make the spread of when people leave a little wider, "
         "but not necessary. Overrides previous threshold in the file.\n"
         "\n"
         'seeding_random_upper_limit': '95',
-        'seeding_random_lower_limit': '45',
+        'seeding_random_lower_limit': '60',
         'lightweight_seeding_settings': 'false\n',
-
         "; Currently a bit experimental. Essentially this determines whether lightweight seeding settings\n"
         "; will be applied when the game starts. Will for example apply a 20 FPS frame limit, and turn master volume to 0, amongst other things.\n"
         "; the program should be able to your path to your config file automatically.\n"
@@ -211,11 +210,11 @@ def initializeGameSeedingConfig(configfile_name):
         mainsection['LastUserConfirmedDesiredScreenWidth'] = '1280'
         mainsection['LastUserConfirmedDesiredScreenHeight'] = '720'
         mainsection['FullscreenMode'] = "2"
+        mainsection['LastConfirmedFullscreenMode'] = "2"
         mainsection['MenuFrameRateLimit'] = '50.000000'
         mainsection['FrameRateLimit'] = "20.000000"
         mainsection['MasterVolume'] = "0.00000"
         mainsection['ScreenPercentage'] = "75"
-        mainsection['LastConfirmedFullscreenMode'] = "2"
         with open(seeding_settings_swap_file, "w") as writefile:
             seedingparser.write(writefile)
 
@@ -249,7 +248,9 @@ def applySeedingSettings(seeding_script_config):
 
 
 
-
+def startBySteam():
+    GAME_URL = "steam://rungameid/393380"
+    subprocess.run(f'start {GAME_URL}', shell=True)
 
 
 
@@ -259,6 +260,11 @@ def applySeedingSettings(seeding_script_config):
 
 
 def configCheckerAndFixer(configfile_name):
+    """
+    Fixes the config file with defaults if entires somehow were to get removed, or the user used an old config file
+    :param configfile_name:
+    :return:
+    """
     config = configparser.ConfigParser()
     config.read(configfile_name)
     if not config.has_option('SETTINGS', 'is_seeding_random_enabled'):
@@ -273,7 +279,13 @@ def configCheckerAndFixer(configfile_name):
         config.set('SETTINGS', 'join_server_automatically_enabled', 'false')
     if not config.has_option('SETTINGS', 'close_script_if_game_not_running'):
         config.set('SETTINGS', 'close_script_if_game_not_running', 'true')
-    with open(configfile_name, 'ab') as f:
+    if not config.has_option('SETTINGS', 'seeding_threshold'):
+        config.set('SETTINGS', 'seeding_threshold', '90')
+    if not config.has_option('SETTINGS', "server_address"):
+        config.set('SETTINGS', "server_address", 'r2f.tacticaltriggernometry.com')
+    if not config.has_option('SETTINGS', 'port'):
+        config.set('SETTINGS', 'port', '27165')
+    with open(configfile_name, 'a') as f:
         config.write(f)
 
 
@@ -295,14 +307,15 @@ def configRead(configfile_name):
         config['OTHER']['squad_install'],\
         config.getboolean('SETTINGS', 'is_seeding_random_enabled'),\
         config.getboolean('SETTINGS', 'lightweight_seeding_settings'),\
-        int(config['SETTINGS']['seeding_random_upper_limit']), \
         int(config['SETTINGS']['seeding_random_lower_limit']), \
+        int(config['SETTINGS']['seeding_random_upper_limit']), \
         int(config['SETTINGS']['game_start_to_button_click_delay']), \
         config.getboolean('SETTINGS', 'join_server_automatically_enabled'), \
         config.getboolean('SETTINGS', 'close_script_if_game_not_running')
 
 
 
+# TODO Make sure the user config settings will be restored properly at all points
 
 def restoreLastUsedSettings(seeding_script_config):
     """
@@ -329,11 +342,12 @@ def restoreOriginalSettings(seeding_script_config):
     config = configparser.ConfigParser()
     config.read(seeding_script_config)
     original_path = os.path.abspath(config['OTHER']['game_config_path'])
-    backup_path = os.path.abspath(f'{original_path}\Backup')
-    original_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
-    backup_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsBackupOfOriginal.ini')
+    backup_configs_path = os.path.abspath(f'{original_path}\Backup')
+    current_active_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
+    backup_config_file = os.path.abspath(f'{backup_configs_path}\GameUserSettingsBackupOfOriginal.ini')
+    compare_file = filecmp.cmp(backup_config_file, current_active_config_file)
     try:
-        shutil.copyfile(backup_config_file, original_config_file)
+        shutil.copyfile(backup_config_file, current_active_config_file)
     except Exception as error:
         print(error)
         print("This likely happened because seeding settings have not been enabled yet in your config file")
@@ -374,7 +388,6 @@ def gameclose(executable):
         print("Something went wrong when trying to close the game")
     if is_seeding_settings_active:
         restoreLastUsedSettings(CONFIGFILE_NAME)
-    sys.exit()
 
 
 def shutdown():
@@ -406,43 +419,114 @@ def serverPlayerCount(server):
 
 
 
-
-
-
-
-
-def autojoin():
-    # These are the default co-ordinates of the server browser and server, respectively, for 1440p
-    x1 = 1330
-    y1 = 377
-    x2 = 900
-    y2 = 505
-    screen_size = pyautogui.size()
+def findAndClickServerBrowser(browser_pic):
     mouse = pyautogui
-    mouse.moveTo(x1, y1, 1, pyautogui.easeInOutQuad)
-    mouse.mouseDown(button="left")
-    time.sleep(0.1)
-    mouse.mouseUp(button="left")
-    time.sleep(15)
-    mouse.moveTo(x2, y2, 1, pyautogui.easeInOutQuad)
-    mouse.doubleClick(interval=0.10)
+    try:
+        x1, y1 = pyautogui.locateCenterOnScreen(browser_pic, confidence=0.5, grayscale=True)
+        mouse.moveTo(x1, (y1 + 3), 1, pyautogui.easeInOutQuad)
+        time.sleep(0.3)
+        mouse.click()
+    except TypeError:
+        print('Could not find the server browser')
+        print('Make sure the game screen is the top window')
 
-
-
-def buttonLocator():
-    browser720p = 'Browser720p_w.png'
-    browser1440p = 'Browser1440p.png'
-    server720p_w = 'Server720p_w.png'
-    server1440p = 'Server1440p.png'
+def findAndClickServerName(server_pic):
     mouse = pyautogui
-    x1, y1 = pyautogui.locateCenterOnScreen(browser720p, confidence=0.5)
-    mouse.moveTo(x1, (y1+3), 1, pyautogui.easeInOutQuad)
-    time.sleep(0.3)
-    mouse.click()
-    time.sleep(20)
-    x2, y2 = pyautogui.locateCenterOnScreen(server720p_w, confidence=0.5)
-    mouse.moveTo(x2, y2, 1, pyautogui.easeInOutQuad)
-    mouse.click(clicks=2, interval=0.11)
+    try:
+        x2, y2 = pyautogui.locateCenterOnScreen(server_pic, confidence=0.5, grayscale=True)
+        mouse.moveTo(x2, y2, 1, pyautogui.easeInOutQuad)
+        mouse.click(clicks=2, interval=0.13)
+        return True
+    except TypeError:
+        print('Could not find the server name')
+        print('Make sure the game screen is the top window')
+        return False
+
+def findAndClickSearchBar(search_bar_pic):
+    try:
+        mouse = pyautogui
+        x1, y1, w1, h1 = pyautogui.locateOnScreen(search_bar_pic, confidence=0.9, grayscale=True)
+        mouse.moveTo(x1+60, y1+10, 1, pyautogui.easeInOutQuad)
+        mouse.click()
+        return True
+    except TypeError:
+        print('Could not find the search bar')
+        print('This could be caused by either the search bar image being too different from how it looks on your screen')
+        print('Or the server name might already be written in?')
+        return False
+
+
+def checkIfAlreadyInBrowser(in_server_browser_pic, in_server_browser_pic2):
+    try:
+        mouse = pyautogui
+        pyautogui.locateCenterOnScreen(in_server_browser_pic, confidence=0.6, grayscale=True)
+        print('Already in browser')
+        return True
+    except TypeError:
+        try:
+            pyautogui.locateCenterOnScreen(in_server_browser_pic2, confidence=0.6, grayscale=True)
+            print('Already in browser')
+            return True
+        except TypeError:
+            return False
+
+
+
+
+
+
+def writeServerToSearchBar():
+    pyautogui.press('t')
+    time.sleep(0.25)
+    pyautogui.press('t')
+    time.sleep(0.25)
+    pyautogui.press('enter')
+
+
+
+
+
+
+
+
+# TODO make sure the locator works for a few more ranges of resolutions.
+
+def buttonLocator720p():
+    script_current_dir = os.path.dirname(__file__)
+    #server1440p = f'{script_current_dir}\\icons\\Server1440p.png'
+    #browser1440p = f'{script_current_dir}\\\icons\\Browser1440p.png'
+    server_in_browser_720p_windowed = f'{script_current_dir}\\icons\\SquadGame_OdNInxa34W.png'
+    server_browser_720p_windowed = f'{script_current_dir}\\icons\\Browser720p_w.png'
+    searchbar_720p_windowed = f'{script_current_dir}\\icons\\SquadGame_d6Rjr1Aisz.png'
+    # In server browser in the context of: if the user already has the server browser open
+    in_server_browser = f'{script_current_dir}\\icons\\SquadGame_OdNInxa34W.png'
+    in_server_browser_var2 = f'{script_current_dir}\\icons\\serverBrowser720p_var1.png'
+    size_x, size_y = pyautogui.size()
+    print('Initializing. Attempting to start for game window at 720p')
+    if (size_x == 1920 and size_y == 1080) or (size_x == 2560 and size_y == 1440):
+        mouse = pyautogui
+        # Did this, so the script would check
+        if checkIfAlreadyInBrowser(in_server_browser, in_server_browser_var2):
+            time.sleep(5)
+            if findAndClickServerName(server_in_browser_720p_windowed):
+                return
+            else:
+                found_searchbar = findAndClickSearchBar(searchbar_720p_windowed)
+        else:
+            findAndClickServerBrowser(server_browser_720p_windowed)
+            time.sleep(15)
+            if findAndClickServerName(server_in_browser_720p_windowed):
+                return
+            else:
+                found_searchbar = findAndClickSearchBar(searchbar_720p_windowed)
+        time.sleep(2)
+        if found_searchbar:
+            writeServerToSearchBar()
+        time.sleep(15)
+        findAndClickServerName(server_in_browser_720p_windowed)
+    else:
+        print('The autostart functionality is only calibrated for 1440p and 1080p')
+        print('Try again with one of those resolution sizes.')
 
 
 
@@ -452,12 +536,23 @@ def buttonLocator():
 
 
 
-"""
-def lastSettingsRestored():
-    if is_seeding_settings_active:
-        config = configparser.ConfigParser()
-        config.read(CONFIGFILE_NAME)
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -514,8 +609,7 @@ if __name__ == '__main__':
     close_script_if_game_not_running = True
     join_server_automatically_enabled = True
     initializeConfigFile(CONFIGFILE_NAME)
-
-
+    script_started_game = False
     user_set_seeding_threshold, \
     address, \
     sleep_interval, \
@@ -545,7 +639,9 @@ if __name__ == '__main__':
         if not isProcessRunning(game_executable):
             if is_seeding_settings_active:
                 applySeedingSettings(CONFIGFILE_NAME)
-            subprocess.run(squad_game_launcher_path)
+            startBySteam()
+            script_started_game = True
+
     except Exception as error:  # Will happen if the game is not already running. This just tells the program
         print(error)  # to carry on if that's the case.
         pass
@@ -571,7 +667,14 @@ if __name__ == '__main__':
             if current_player_count >= user_set_seeding_threshold:
                 if userinput == 'close':
                     gameclose(game_executable)
+                    if script_started_game:
+                        restoreLastUsedSettings(CONFIGFILE_NAME)
+                        sys.exit('Game has been closed and the settings restored')
+                    sys.exit("Game has been closed")
                 elif userinput == 'shutdown':
+                    if script_started_game:
+                        restoreLastUsedSettings(CONFIGFILE_NAME)
+                        print('Settings have been restored.')
                     shutdown()
         except Exception as error:
             print(error)
