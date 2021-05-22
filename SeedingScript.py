@@ -160,7 +160,9 @@ def initializeConfigFile(configfile_name):
 
 
 
-        config['OTHER'] = {'game_executable': 'SquadGame.exe',
+        config['OTHER'] = {
+        'desired_action': 'None',
+        'game_executable': 'SquadGame.exe',
         'squad_install': 'C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe',
         '; The install path to the game, replace this if applicable, usually if the game is installed on a different drive \n'
         "; Make sure to include 'squad_launcher.exe' at the end of the path.\n"
@@ -228,15 +230,17 @@ def applySeedingSettings(seeding_script_config):
     config.read(seeding_script_config)
     original_path = os.path.abspath(config['OTHER']['game_config_path'])
     backup_folder_path = os.path.abspath(f'{original_path}/Backup')
-    original_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
+    currently_active_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
     on_startup_file = os.path.abspath(f'{backup_folder_path}\GameUserSettingsLastUsed.ini')
     swap_config_file = os.path.abspath(f'{backup_folder_path}\GameUserSettingsSwapFile.ini')
     swap_config_file = str(swap_config_file)
-    compare_file = filecmp.cmp(swap_config_file, on_startup_file)
+    on_startup_file = str(on_startup_file)
+    compare_file = filecmp.cmp(swap_config_file, currently_active_config_file)
+
     try:
         if not compare_file:
-            shutil.copyfile(original_config_file, on_startup_file)
-            shutil.copyfile(swap_config_file, original_config_file)
+            shutil.copyfile(currently_active_config_file, on_startup_file)
+            shutil.copyfile(swap_config_file, currently_active_config_file)
             print("Lightweight seeding settings applied")
             return
         else:
@@ -248,9 +252,25 @@ def applySeedingSettings(seeding_script_config):
 
 
 
-def startBySteam():
-    GAME_URL = "steam://rungameid/393380"
-    subprocess.run(f'start {GAME_URL}', shell=True)
+def startGame(game_launcher):
+    """
+    Starts Squad by telling steam to start it. Better solution than straight up starting the squad launcher
+    :return:
+    """
+    try:
+        GAME_URL = "steam://rungameid/393380"
+        subprocess.run(f'start {GAME_URL}', shell=True)
+    except Exception:
+        try:
+            subprocess.run(squad_game_launcher_path)
+        except Exception as error:
+            print(error)
+            print('Something went wrong when trying to start the game')
+            print('Make sure that your set path to the game is set correctly in the "seedingconfig.ini" file')
+            print('Another possibility might be that the game is already running')
+            print('')
+
+
 
 
 
@@ -267,6 +287,7 @@ def configCheckerAndFixer(configfile_name):
     """
     config = configparser.ConfigParser()
     config.read(configfile_name)
+
     if not config.has_option('SETTINGS', 'is_seeding_random_enabled'):
         config.set('SETTINGS', 'is_seeding_random_enabled', 'true')
     if not config.has_option('SETTINGS', 'lightweight_seeding_settings'):
@@ -285,7 +306,7 @@ def configCheckerAndFixer(configfile_name):
         config.set('SETTINGS', "server_address", 'r2f.tacticaltriggernometry.com')
     if not config.has_option('SETTINGS', 'port'):
         config.set('SETTINGS', 'port', '27165')
-    with open(configfile_name, 'a') as f:
+    with open(configfile_name, 'w') as f:
         config.write(f)
 
 
@@ -303,7 +324,8 @@ def configRead(configfile_name):
     return\
         int(config['SETTINGS']['seeding_threshold']),\
         (config['SETTINGS']["server_address"], int(config['SETTINGS']['port'])), \
-        config['SETTINGS']['sleep_interval'], config['OTHER']['game_executable'],\
+        config['SETTINGS']['sleep_interval'],\
+        config['OTHER']['game_executable'],\
         config['OTHER']['squad_install'],\
         config.getboolean('SETTINGS', 'is_seeding_random_enabled'),\
         config.getboolean('SETTINGS', 'lightweight_seeding_settings'),\
@@ -347,7 +369,8 @@ def restoreOriginalSettings(seeding_script_config):
     backup_config_file = os.path.abspath(f'{backup_configs_path}\GameUserSettingsBackupOfOriginal.ini')
     compare_file = filecmp.cmp(backup_config_file, current_active_config_file)
     try:
-        shutil.copyfile(backup_config_file, current_active_config_file)
+        if not compare_file:
+            shutil.copyfile(backup_config_file, current_active_config_file)
     except Exception as error:
         print(error)
         print("This likely happened because seeding settings have not been enabled yet in your config file")
@@ -377,7 +400,7 @@ def isProcessRunning(executable):
 
 def gameclose(executable):
     """
-    Function that shuts down the game when the serverPlayerCount reaches the critical threshold.
+    Function that shuts down the game when the findCurrentPlayercount reaches the critical threshold.
     :param executable: The game's executable name.
     """
     try:
@@ -403,7 +426,7 @@ def shutdown():
     os.system("shutdown /s /t 1")
 
 
-def serverPlayerCount(server):
+def findCurrentPlayercount(server):
     """
     The amount of players that are actively loaded in to the server. Done this way since the attribute of a2s.players
     includes players in queue.
@@ -419,27 +442,28 @@ def serverPlayerCount(server):
 
 
 
-def findAndClickServerBrowser(browser_pic):
-    mouse = pyautogui
+
+def findAndClickServerBrowser(server_browser_button):
     try:
-        x1, y1 = pyautogui.locateCenterOnScreen(browser_pic, confidence=0.5, grayscale=True)
+        mouse = pyautogui
+        x1, y1 = pyautogui.locateCenterOnScreen(server_browser_button, confidence=0.5, grayscale=True)
         mouse.moveTo(x1, (y1 + 3), 1, pyautogui.easeInOutQuad)
         time.sleep(0.3)
         mouse.click()
+        return True
     except TypeError:
         print('Could not find the server browser')
         print('Make sure the game screen is the top window')
+        return False
 
 def findAndClickServerName(server_pic):
-    mouse = pyautogui
     try:
+        mouse = pyautogui
         x2, y2 = pyautogui.locateCenterOnScreen(server_pic, confidence=0.5, grayscale=True)
         mouse.moveTo(x2, y2, 1, pyautogui.easeInOutQuad)
         mouse.click(clicks=2, interval=0.13)
         return True
     except TypeError:
-        print('Could not find the server name')
-        print('Make sure the game screen is the top window')
         return False
 
 def findAndClickSearchBar(search_bar_pic):
@@ -450,22 +474,16 @@ def findAndClickSearchBar(search_bar_pic):
         mouse.click()
         return True
     except TypeError:
-        print('Could not find the search bar')
-        print('This could be caused by either the search bar image being too different from how it looks on your screen')
-        print('Or the server name might already be written in?')
         return False
 
 
 def checkIfAlreadyInBrowser(in_server_browser_pic, in_server_browser_pic2):
     try:
-        mouse = pyautogui
-        pyautogui.locateCenterOnScreen(in_server_browser_pic, confidence=0.6, grayscale=True)
-        print('Already in browser')
+        x, y = pyautogui.locateCenterOnScreen(in_server_browser_pic, confidence=0.7, grayscale=True)
         return True
     except TypeError:
         try:
-            pyautogui.locateCenterOnScreen(in_server_browser_pic2, confidence=0.6, grayscale=True)
-            print('Already in browser')
+            x, y = pyautogui.locateCenterOnScreen(in_server_browser_pic2, confidence=0.7, grayscale=True)
             return True
         except TypeError:
             return False
@@ -474,83 +492,83 @@ def checkIfAlreadyInBrowser(in_server_browser_pic, in_server_browser_pic2):
 
 
 
+def cleanSearchBar():
+    for i in range(25):
+        pyautogui.press('backspace')
 
-def writeServerToSearchBar():
-    pyautogui.press('t')
-    time.sleep(0.25)
-    pyautogui.press('t')
-    time.sleep(0.25)
+
+
+def writeServerToSearchBar(server_name):
+    for letter in server_name:
+        pyautogui.press(letter)
+        time.sleep(random.uniform(0.1, 0.25))
+    time.sleep(1)
     pyautogui.press('enter')
 
 
 
 
+def buttonLocator1080p():
+    # TODO find a calibration that works for 1080p
+    script_current_dir = os.path.dirname(__file__)
+    server1440p = f'{script_current_dir}\\icons\\Server1440p.png'
+    browser1440p = f'{script_current_dir}\\\icons\\Browser1440p.png'
 
 
 
 
 # TODO make sure the locator works for a few more ranges of resolutions.
 
-def buttonLocator720p():
+def locateAndJoinServer(server_to_autojoin):
     script_current_dir = os.path.dirname(__file__)
-    #server1440p = f'{script_current_dir}\\icons\\Server1440p.png'
-    #browser1440p = f'{script_current_dir}\\\icons\\Browser1440p.png'
-    server_in_browser_720p_windowed = f'{script_current_dir}\\icons\\SquadGame_OdNInxa34W.png'
-    server_browser_720p_windowed = f'{script_current_dir}\\icons\\Browser720p_w.png'
-    searchbar_720p_windowed = f'{script_current_dir}\\icons\\SquadGame_d6Rjr1Aisz.png'
+    server_in_browser_720p_windowed = f'{script_current_dir}\\icons\\ServerName720p.png'
+    server_browser_button_720p_windowed = f'{script_current_dir}\\icons\\Server_browser_button_720p_windowed.png'
+    searchbar_720p_windowed = f'{script_current_dir}\\icons\\Search_Bar720p.png'
+    # mainscreen_720p_windowed = f'{script_current_dir}\\icons\\MainScreen_720_windowed.png'
     # In server browser in the context of: if the user already has the server browser open
-    in_server_browser = f'{script_current_dir}\\icons\\SquadGame_OdNInxa34W.png'
-    in_server_browser_var2 = f'{script_current_dir}\\icons\\serverBrowser720p_var1.png'
+    in_server_browser = f'{script_current_dir}\\icons\\in_server_browser720p_windowed.png'
+    in_server_browser2 = f'{script_current_dir}\\icons\\in_server_browser720p_windowed2.png'
+
+
     size_x, size_y = pyautogui.size()
-    print('Initializing. Attempting to start for game window at 720p')
     if (size_x == 1920 and size_y == 1080) or (size_x == 2560 and size_y == 1440):
-        mouse = pyautogui
+        print('Initializing. Attempting to start for game window at 720p')
         # Did this, so the script would check
-        if checkIfAlreadyInBrowser(in_server_browser, in_server_browser_var2):
-            time.sleep(5)
-            if findAndClickServerName(server_in_browser_720p_windowed):
-                return
-            else:
-                found_searchbar = findAndClickSearchBar(searchbar_720p_windowed)
-        else:
-            findAndClickServerBrowser(server_browser_720p_windowed)
-            time.sleep(15)
-            if findAndClickServerName(server_in_browser_720p_windowed):
-                return
-            else:
-                found_searchbar = findAndClickSearchBar(searchbar_720p_windowed)
-        time.sleep(2)
-        if found_searchbar:
-            writeServerToSearchBar()
-        time.sleep(15)
-        findAndClickServerName(server_in_browser_720p_windowed)
+        if checkIfAlreadyInBrowser(in_server_browser, in_server_browser2):
+            for i in range(10):
+                if findAndClickServerName(server_in_browser_720p_windowed):
+                    print('Succesfully joined the server')
+                    return True
+                time.sleep(1)
+            if findAndClickSearchBar(searchbar_720p_windowed):
+                pyautogui.move(100, 0)
+                cleanSearchBar()
+                writeServerToSearchBar(server_to_autojoin)
+                for i in range(15):
+                    if findAndClickServerName(server_in_browser_720p_windowed):
+                        print('Succesfully joined the server')
+                        return True
+                    time.sleep(1)
+
+
+        if findAndClickServerBrowser(server_browser_button_720p_windowed):
+            for i in range(15):
+                if findAndClickServerName(server_in_browser_720p_windowed):
+                    print('Succesfully joined the server')
+                    return True
+                time.sleep(1)
+            if findAndClickSearchBar(searchbar_720p_windowed):
+                pyautogui.move(100, 0)
+                cleanSearchBar()
+                writeServerToSearchBar(server_to_autojoin)
+                for i in range(15):
+                    if findAndClickServerName(server_in_browser_720p_windowed):
+                        print('Succesfully joined the server')
+                        return True
+                    time.sleep(1)
     else:
-        print('The autostart functionality is only calibrated for 1440p and 1080p')
+        print('The autostart functionality is only calibrated for 1440p and 1080p, with the window at 720p')
         print('Try again with one of those resolution sizes.')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -588,10 +606,12 @@ def cmdlineArgumentHandler():
             if argument.startswith("-thresh"):
                 try:
                     global user_set_seeding_threshold
+                    global is_seeding_random_enabled
                     thresh = argument[7:]
                     user_set_seeding_threshold = int(thresh)
+                    is_seeding_random_enabled = False
                 except Exception as err:
-                    print(err, "Error, likely invalid charcter or no number after 'thresh' command was put in")
+                    print(err, "Error, likely invalid character or no number after 'thresh' command was put in")
                     sys.exit()
     except Exception as err:
         print(err)
@@ -605,11 +625,13 @@ def cmdlineArgumentHandler():
 if __name__ == '__main__':
     userinput = ""
     CONFIGFILE_NAME = "seedingconfig.ini"
+    server_to_autojoin = 'triggernometry'
     # ALTERNATIVE_CONFIGFILE = os.path.abspath("C:\Users\Steffen\AppData\Local\Seedingscript\seedingscript.ini")
-    close_script_if_game_not_running = True
-    join_server_automatically_enabled = True
     initializeConfigFile(CONFIGFILE_NAME)
+    # configCheckerAndFixer(CONFIGFILE_NAME)
     script_started_game = False
+
+
     user_set_seeding_threshold, \
     address, \
     sleep_interval, \
@@ -624,11 +646,9 @@ if __name__ == '__main__':
     close_script_if_game_not_running = configRead(CONFIGFILE_NAME)
 
 
-
-
-    if is_seeding_random_enabled:
-        user_set_seeding_threshold = random.randint(seeding_random_lower, seeding_random_upper)
     try:
+        if is_seeding_random_enabled:
+            user_set_seeding_threshold = random.randint(seeding_random_lower, seeding_random_upper)
         if is_seeding_settings_active:
             initializeGameSeedingConfig(CONFIGFILE_NAME)
         # Calls the command handler function to see if any arguments were supplied from commandline, if not runs the GUI
@@ -639,20 +659,30 @@ if __name__ == '__main__':
         if not isProcessRunning(game_executable):
             if is_seeding_settings_active:
                 applySeedingSettings(CONFIGFILE_NAME)
-            startBySteam()
+            startGame(squad_game_launcher_path)
             script_started_game = True
 
-    except Exception as error:  # Will happen if the game is not already running. This just tells the program
-        print(error)  # to carry on if that's the case.
-        pass
-    print(f"Your activation threshold is:  {user_set_seeding_threshold}")
-    if is_seeding_settings_active:
-        time.sleep(10)
-        restoreLastUsedSettings(CONFIGFILE_NAME)
-    # Essentially how long the program waits between the game starting and when it will try and locate the server.
-    time.sleep(game_start_to_button_click_delay)
-    if join_server_automatically_enabled:
-        buttonLocator()
+            if is_seeding_settings_active:
+                time.sleep(20)
+                restoreLastUsedSettings(CONFIGFILE_NAME)
+
+            inc = 0
+            while inc < 3:
+                if join_server_automatically_enabled:
+                    time.sleep(game_start_to_button_click_delay)
+                    joined_server = locateAndJoinServer(server_to_autojoin)
+                    if joined_server:
+                        break
+                    inc += 1
+
+        print(f"Your activation threshold is:  {user_set_seeding_threshold}")
+
+        # Essentially how long the program waits between the game starting and when it will try and locate the server.
+
+
+
+    except Exception as error: # Will happen if the game is not already running. This just tells the program
+        print(error)           # to carry on if that's the case.
     while True:
         try:
             if close_script_if_game_not_running:
@@ -662,7 +692,7 @@ if __name__ == '__main__':
                     sys.exit("Game not running, shutting down script")
             now = datetime.datetime.now()
             current_time = now.strftime("%H:%M")
-            current_player_count = serverPlayerCount(address)
+            current_player_count = findCurrentPlayercount(address)
             print(f" {current_time}  -- There are currently {current_player_count} players on the server")
             if current_player_count >= user_set_seeding_threshold:
                 if userinput == 'close':
