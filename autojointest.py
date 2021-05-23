@@ -9,7 +9,7 @@ import time
 import win32gui
 import win32process
 from win32ctypes import pywin32
-
+import psutil
 
 def mousePosition():
     try:
@@ -28,6 +28,12 @@ def mousePosition():
 
 
 def findAndClickServerBrowser(server_browser_button):
+    """
+    Tries and find the server browser button from the supplied image, and clicks it and returns True if it can.
+    Returns false if it can't find it.
+    :param server_browser_button:
+    :return:
+    """
     try:
         mouse = pyautogui
         x1, y1 = pyautogui.locateCenterOnScreen(server_browser_button, confidence=0.5, grayscale=True)
@@ -85,37 +91,32 @@ def writeServerToSearchBar(server_name):
 
 
 
-
-
-
-
-def findUserScreenAndGameWindowSize():
+def forceGameWindowToTop():
     windowlist = []
     window_name = 'SquadGame'
     def winEnumHandler(hwnd, ctx):
-        if win32gui.IsWindowVisible(hwnd):
-            window_name = str(win32gui.GetWindowText(hwnd))
-            if 'SquadGame' in window_name:
-                windowlist.append(hwnd)
+        window_name = str(win32gui.GetWindowText(hwnd))
+        if 'SquadGame' in window_name:
+            windowlist.append(hwnd)
     win32gui.EnumWindows(winEnumHandler, None)
-
-    # screen_size_x, screen_size_y = pyautogui.size()
-    #win32gui.SetForegroundWindow(squad_window)
-
-
-    #print(windowlist)
-
     squad_window_handle = windowlist[0]
+    win32gui.SetForegroundWindow(squad_window_handle)
+    return squad_window_handle
+
+
+def findUsersMonitorResolution():
+    screen_size_x, screen_size_y = pyautogui.size()
+    return screen_size_x, screen_size_y
+
+
+
+def findUsersGameWindowSize():
+    squad_window_handle = forceGameWindowToTop()
+    # The game cannot be minimized when getting the window size, so forcing it to the foreground gets around that.
+    win32gui.SetForegroundWindow(squad_window_handle)
     clientRect = win32gui.GetClientRect(squad_window_handle)
-    game_client_height, game_client_width = clientRect[2], clientRect[3]
-    print(game_client_height, game_client_width)
-
-
-
-    #squad_game_window = win32gui.FindWindow(None, )
-    #window_size = win32gui.GetWindowRect(squad_game_window)
-    #print(window_size)
-
+    game_client_width, game_client_height = clientRect[2], clientRect[3]
+    return game_client_width, game_client_height
 
 
 
@@ -163,10 +164,10 @@ def locateAndJoinServer(server_to_autojoin):
 
 
         if findAndClickServerBrowser(server_browser_button_720p_windowed):
-            for i in range(15):
-                if findAndClickServerName(server_in_browser_720p_windowed):
-                    return True
-                time.sleep(1)
+            time.sleep(10)
+            if findAndClickServerName(server_in_browser_720p_windowed):
+                time.sleep(2)
+                return True
             if findAndClickSearchBar(searchbar_720p_windowed):
                 pyautogui.move(100, 0)
                 cleanSearchBar()
@@ -181,39 +182,6 @@ def locateAndJoinServer(server_to_autojoin):
 
 
 
-
-def configHandler(configfile_name):
-    """
-    Checks if the config file exists, if not, it will create it with the default settings.
-    Afterwards, returns the values needed from the config file.
-    """
-    config = configparser.ConfigParser()
-    config.read(configfile_name)
-    if not 'join_server_automatically_enabled' in config:
-        config.set('SETTINGS', 'join_server_automatically_enabled', 'false')
-    if not config.has_option('SETTINGS', 'is_seeding_random_enabled'):
-        config.set('SETTINGS', 'is_seeding_random_enabled', 'false')
-    if not config.has_option('SETTINGS', 'lightweight_seeding_settings'):
-        config.set('SETTINGS', 'lightweight_seeding_settings', 'false')
-    if not config.has_option('SETTINGS', 'join_server_automatically_enabled'):
-        config.set('SETTINGS', 'join_server_automatically_enabled', 'false')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    with open(configfile_name, 'w') as configfile:
-        config.write(configfile)
 
 
 
@@ -320,6 +288,46 @@ def initializeConfigFile(configfile_name):
 
 
 
+#def isProcessRunning(executable):
+    """
+    Checks if the game is already running, returns a boolean.
+
+    call = 'TASKLIST', '/FI', f'imagename eq {executable}'
+    # use buildin check_output right away
+    try:
+        output = subprocess.check_output(call).decode()
+        # check in last line for process name
+        # because Fail message could be translated
+        last_line = output.strip().split('\r\n')[-1]
+        return last_line.lower().startswith(executable.lower())
+    except Exception as error:
+        print(error)
+        print("Something went wrong in finding the process")
+        """
+
+
+
+
+
+
+
+
+
+
+def isProcessRunning(executable):
+    """
+    Checks if the game is already running, returns a boolean.
+    """
+    try:
+        game_running = executable in (p.name() for p in psutil.process_iter())
+        return game_running
+    except Exception as error:
+        print(error)
+        print("Something went wrong in finding the game process")
+
+
+
+
 
 
 
@@ -329,19 +337,28 @@ def initializeConfigFile(configfile_name):
 
 
 if __name__ == '__main__':
+    executable = 'SquadGame.exe'
     CONFIGFILE_NAME = "seedingconfig.ini"
     SERVER_TO_AUTOJOIN = 'triggernometry'
     #configCheckerAndFixer(CONFIGFILE_NAME)
     #locateAndJoinServer(SERVER_TO_AUTOJOIN)
-    findUserScreenAndGameWindowSize()
 
-    #startGame()
+    #findWindowFromProcess()
+    #print(isProcessRunning(executable))
+    findWindowFromProcess()
+
+
+
+
+
+
+
 
 
 
 
     #screenSizeTest()
-    #configRead(CONFIGFILE_NAME)
+    #configReadAndLoad(CONFIGFILE_NAME)
     #autojoin()
     #mousePosition()
 
