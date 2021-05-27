@@ -13,9 +13,15 @@ from tkinter import *
 import a2s
 import psutil
 import pyautogui
+import win32com.client
+import win32gui
+
+
+
+
 
 # TODO: Make variable and function names consistent, remove redundant code
-import win32gui
+
 
 
 class MultiOrderedDict(OrderedDict):
@@ -50,12 +56,12 @@ class GUI:
 
         def close_button():
             if is_seeding_settings_active:
-                restoreLastUsedSettings(CONFIGFILE_NAME)
+                restoreLastUsedSettings(CONFIGFILE_PATH)
             sys.exit()
 
         def restore_original_settings_print():
             try:
-                restoreOriginalSettings(CONFIGFILE_NAME)
+                restoreOriginalSettings(CONFIGFILE_PATH)
                 print("Last original settings have been restored")
             except Exception as e:
                 print(e)
@@ -64,7 +70,7 @@ class GUI:
 
         def restore_last_settings_print():
             try:
-                restoreLastUsedSettings(CONFIGFILE_NAME)
+                restoreLastUsedSettings(CONFIGFILE_PATH)
                 print("Last used settings have been restored")
             except Exception as e:
                 print(e)
@@ -105,7 +111,7 @@ class GUI:
 
 
 
-def configFileInitialize(configfile_name):
+def InitializeScriptConfigFile(configfile_name):
     """
     Initializes the basic config file the program uses, stored in the same folder as the
     :param configfile_name:
@@ -151,7 +157,7 @@ def configFileInitialize(configfile_name):
         '; This allows you to automatically join the server. Note, this will ONLY work if TT is set to favourite \n'
         '; Aswell as favourites only being activated in the browser.\n'
         '\n'
-        'game_start_to_button_click_delay': '45',
+        'game_start_to_autojoin_delay': '45',
         '; The delay for how long the program will wait before it tries to join the server\n'
         '; You might want to change this as needed depending on how fast your computer is.\n'
         'close_script_if_game_not_running' : 'true',
@@ -175,7 +181,7 @@ def configFileInitialize(configfile_name):
         'game_config_path': f"{path}\n"
         "; The path to your config file folder. The program should hopefully be able to find this\n"
         "; But change this to the correct one if errors start being thrown.\n"}
-        with open(CONFIGFILE_NAME, "w") as configfile:
+        with open(CONFIGFILE_PATH, "w") as configfile:
             config.write(configfile)
         return
 
@@ -193,7 +199,6 @@ def initializeGameSeedingConfig(configfile_name):
     on_startup_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
     seeding_settings_swap_file = os.path.abspath(f'{backup_path}\GameUserSettingsSwapFile.ini')
     backup_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsBackupOfOriginal.ini')
-    # The path is stored as an attribute of an object, so needs to be converted back to a string.
 
 
 
@@ -242,17 +247,21 @@ def applySeedingSettings(seeding_script_config):
     swap_config_file = str(swap_config_file)
     on_startup_file = str(on_startup_file)
     compare_file = filecmp.cmp(swap_config_file, currently_active_config_file)
+    compare_last_used = filecmp.cmp(on_startup_file, swap_config_file)
 
     try:
-        if not compare_file:
+        if compare_file:
+            print("Seeding settings were already in place")
+            print("Perhaps the program was not closed properly last time?")
+            return
+        else:
             shutil.copyfile(currently_active_config_file, on_startup_file)
             shutil.copyfile(swap_config_file, currently_active_config_file)
             print("Lightweight seeding settings applied")
             return
-        else:
-            print("Seeding settings were already in place")
-            print("Perhaps the program was not closed properly last time?")
-            return
+
+
+
     except Exception as error:
         print(error)
 
@@ -337,7 +346,7 @@ def configReadAndLoad(configfile_name):
         config.getboolean('SETTINGS', 'lightweight_seeding_settings'),\
         int(config['SETTINGS']['seeding_random_lower_limit']), \
         int(config['SETTINGS']['seeding_random_upper_limit']), \
-        int(config['SETTINGS']['game_start_to_button_click_delay']), \
+        int(config['SETTINGS']['game_start_to_autojoin_delay']), \
         config.getboolean('SETTINGS', 'join_server_automatically_enabled'), \
         config.getboolean('SETTINGS', 'close_script_if_game_not_running')
 
@@ -356,9 +365,11 @@ def restoreLastUsedSettings(seeding_script_config):
     backup_path = os.path.abspath(f'{original_path}\Backup')
     current_active_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
     last_used_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
+    swap_file = os.path.abspath(f'{backup_path}\GameUserSettingsSwapFile.ini')
     compare_file = filecmp.cmp(last_used_config_file, current_active_config_file)
+    compare_current_with_swap = filecmp.cmp(last_used_config_file, swap_file)
     try:
-        if not compare_file:
+        if not (compare_file and compare_current_with_swap):
             shutil.copyfile(last_used_config_file, current_active_config_file)
             print('Last used settings have been restored')
     except Exception as error:
@@ -413,8 +424,6 @@ def gameclose(executable):
     except Exception as exception:
         print(exception)
         print("Something went wrong when trying to close the game")
-    if is_seeding_settings_active:
-        restoreLastUsedSettings(CONFIGFILE_NAME)
 
 
 def shutdown():
@@ -423,7 +432,7 @@ def shutdown():
     """
     try:
         if is_seeding_settings_active:
-            restoreLastUsedSettings(CONFIGFILE_NAME)
+            restoreLastUsedSettings(CONFIGFILE_PATH)
     except Exception as exception:
         print(exception)
     print("Shutting down the computer")
@@ -448,35 +457,46 @@ def findCurrentPlayercount(server):
 
 
 def findAndClickServerBrowser(server_browser_button):
+    """
+    Tries and find the server browser button from the supplied image, and clicks it and returns True if it can.
+    Returns false if it can't find it.
+    :param server_browser_button:
+    :return:
+    """
     try:
+        forceSquadWindowToTop(findSquadWindowHandle())
         mouse = pyautogui
         x1, y1 = pyautogui.locateCenterOnScreen(server_browser_button, confidence=0.5, grayscale=True)
-        mouse.moveTo(x1, (y1 + 3), 1, pyautogui.easeInOutQuad)
-        time.sleep(0.3)
-        mouse.click()
+        mouse.click(x1, (y1 + 3))
         return True
     except TypeError:
-        print('Could not find the server browser')
-        print('Make sure the game screen is the top window')
         return False
 
-def findAndClickServerName(server_pic):
+def findAndClickServerName(server_name_icon, modded_server_icon, game_resolution):
+    x_buffer = 0
+    y_buffer = 0
+    forceSquadWindowToTop(findSquadWindowHandle())
     try:
         mouse = pyautogui
-        x2, y2 = pyautogui.locateCenterOnScreen(server_pic, confidence=0.5, grayscale=True)
-        mouse.moveTo(x2, y2, 1, pyautogui.easeInOutQuad)
-        mouse.click(clicks=2, interval=0.15)
-        time.sleep(1)
+        x2, y2 = pyautogui.locateCenterOnScreen(server_name_icon, confidence=0.5, grayscale=True)
+        mouse.moveTo(x2, y2)
+        mouse.doubleClick()
+        try:
+            x, y = pyautogui.locateOnScreen(modded_server_icon, confidence=0.7, grayscale=True)
+            pyautogui.moveTo(x, y)
+            pyautogui.click()
+        except TypeError:
+            pass
         return True
     except TypeError:
         return False
 
 def findAndClickSearchBar(search_bar_pic):
     try:
+        forceSquadWindowToTop(findSquadWindowHandle())
         mouse = pyautogui
-        x1, y1, w1, h1 = pyautogui.locateOnScreen(search_bar_pic, confidence=0.9, grayscale=True)
-        mouse.moveTo(x1+60, y1+10, 1, pyautogui.easeInOutQuad)
-        mouse.click()
+        x1, y1, w1, h1 = pyautogui.locateOnScreen(search_bar_pic, confidence=0.8, grayscale=True)
+        mouse.click(x1+60, y1+10)
         return True
     except TypeError:
         return False
@@ -496,42 +516,39 @@ def checkIfAlreadyInBrowser(in_server_browser_pic, in_server_browser_pic2):
 
 
 
-def cleanSearchBar():
-    for i in range(25):
-        pyautogui.press('backspace')
-
-
 
 def writeServerToSearchBar(server_name):
     for letter in server_name:
         pyautogui.press(letter)
         time.sleep(random.uniform(0.1, 0.25))
-    time.sleep(1)
+    time.sleep(0.5)
     pyautogui.press('enter')
 
 
 
-
-def buttonLocator1080p():
-    # TODO find a calibration that works for 1080p
-    script_current_dir = os.path.dirname(__file__)
-    server1440p = f'{script_current_dir}\\icons\\Server1440p.png'
-    browser1440p = f'{script_current_dir}\\\icons\\Browser1440p.png'
-
-
-
-
-def forceGameWindowToTop():
+def findSquadWindowHandle():
     windowlist = []
-    window_name = 'SquadGame'
     def winEnumHandler(hwnd, ctx):
         window_name = str(win32gui.GetWindowText(hwnd))
         if 'SquadGame' in window_name:
             windowlist.append(hwnd)
     win32gui.EnumWindows(winEnumHandler, None)
     squad_window_handle = windowlist[0]
-    win32gui.SetForegroundWindow(squad_window_handle)
     return squad_window_handle
+
+
+
+
+def forceSquadWindowToTop(window_handle):
+    win32gui.BringWindowToTop(window_handle)
+    shell = win32com.client.Dispatch('WScript.Shell')
+    shell.SendKeys('%')
+    win32gui.SetForegroundWindow(window_handle)
+    win32gui.ShowWindow(window_handle, 9)
+    return window_handle
+
+
+
 
 
 def findUsersMonitorResolution():
@@ -541,85 +558,82 @@ def findUsersMonitorResolution():
 
 
 def findUsersGameWindowSize():
-    squad_window_handle = forceGameWindowToTop()
+    """
+    :return:
+    """
+    try:
+        squad_window_handle = findSquadWindowHandle()
+    except Exception:
+        return None
     # The game cannot be minimized when getting the window size, so forcing it to the foreground gets around that.
-    win32gui.SetForegroundWindow(squad_window_handle)
-    game_window_size = win32gui.GetClientRect(squad_window_handle)
-    game_client_width, game_client_height = game_window_size[2], game_window_size[3]
+    clientRect = win32gui.GetClientRect(squad_window_handle)
+    game_client_width, game_client_height = clientRect[2], clientRect[3]
     return game_client_width, game_client_height
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def cleanSearchBar(length_to_clean):
+    """
+    Cleans the address/search bar that is currently active, up to a certain amount of characters
+    :return:
+    """
+    for i in range(length_to_clean):
+        pyautogui.press('backspace')
 
 
 
 # TODO make sure the locator works for a few more ranges of resolutions.
 
-def locateAndJoinServer(server_to_autojoin):
-    script_current_dir = os.path.dirname(__file__)
-    server_in_browser_720p_windowed = f'{script_current_dir}\\icons\\ServerName720p.png'
-    server_browser_button_720p_windowed = f'{script_current_dir}\\icons\\Server_browser_button_720p_windowed.png'
-    searchbar_720p_windowed = f'{script_current_dir}\\icons\\Search_Bar720p.png'
-    # mainscreen_720p_windowed = f'{script_current_dir}\\icons\\MainScreen_720_windowed.png'
-    # In server browser in the context of: if the user already has the server browser open
-    in_server_browser = f'{script_current_dir}\\icons\\in_server_browser720p_windowed.png'
-    in_server_browser2 = f'{script_current_dir}\\icons\\in_server_browser720p_windowed2.png'
+def locateAndJoinServer(server_string_to_autojoin, server_name_picture,
+                        server_browser_button, search_bar, in_server_browser,
+                        in_server_browser_backup, modded_server_icon,
+                        game_resolution):
+    """
+    Function to click the necessary buttons and input the necessary strings to join the specified server automatically.
+    Will only work as long as the user is in the main menu.
+    :param server_string_to_autojoin: The name of the server in string form. Should ideally be unique enough that only
+    the desired server shows up
+    :param server_name_picture: A picture of the desired server name, in the server browser,
+    taken from the resolution the function should work for
+    :param server_browser_button: A picture of the server browser button, without any menus open
+    :param search_bar: A picture of the search bar
+    :param in_server_browser: A picture that uniquely identifies the user as being in the server browser
+    :param in_server_browser_backup: A picture that uniquely identifies the user as being in the server browser, used as a backup
+    :param modded_server_icon: A picture of the modded server join button
+    :return:
+    """
 
-    print('Initializing. Attempting to start for game window at 720p')
     # Did this, so the script would check
-    if checkIfAlreadyInBrowser(in_server_browser, in_server_browser2):
-        for i in range(10):
-            if findAndClickServerName(server_in_browser_720p_windowed):
-                print('Succesfully joined the server')
+    forceSquadWindowToTop(findSquadWindowHandle())
+    if checkIfAlreadyInBrowser(in_server_browser, in_server_browser_backup):
+        for i in range(50):
+            if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                 return True
-            time.sleep(1)
-        if findAndClickSearchBar(searchbar_720p_windowed):
+            time.sleep(0.1)
+        if findAndClickSearchBar(search_bar):
             pyautogui.move(100, 0)
-            cleanSearchBar()
-            writeServerToSearchBar(server_to_autojoin)
-            for i in range(15):
-                if findAndClickServerName(server_in_browser_720p_windowed):
-                    print('Succesfully joined the server')
+            cleanSearchBar(25)
+            writeServerToSearchBar(server_string_to_autojoin)
+            for i in range(50):
+                if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                     return True
-                time.sleep(1)
-
-
-    if findAndClickServerBrowser(server_browser_button_720p_windowed):
-        for i in range(3):
-            if findAndClickServerName(server_in_browser_720p_windowed):
-                print('Succesfully joined the server')
+                time.sleep(0.1)
+    if findAndClickServerBrowser(server_browser_button):
+        time.sleep(20)
+        for i in range(30):
+            if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                 return True
-            time.sleep(8)
-        if findAndClickSearchBar(searchbar_720p_windowed):
-            pyautogui.move(100, 0)
-            cleanSearchBar()
-            writeServerToSearchBar(server_to_autojoin)
-            for i in range(15):
-                if findAndClickServerName(server_in_browser_720p_windowed):
-                    print('Succesfully joined the server')
-                    return True
-                time.sleep(1)
-    else:
-        print('The autostart functionality is only calibrated for 1440p and 1080p, with the window at 720p')
-        print('Try again with one of those resolution sizes.')
-
-
+            time.sleep(0.1)
+        for i in range(100):
+            if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
+                pyautogui.move(100, 0)
+                cleanSearchBar(25)
+                writeServerToSearchBar(server_string_to_autojoin)
+        for i in range(50):
+            if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
+                return True
+            time.sleep(0.1)
 
 
 
@@ -657,7 +671,7 @@ def cmdlineArgumentHandler():
                 userinput = "shutdown"
                 print("Your computer will shut down upon hitting the threshold")
             if argument == "-restorelast":
-                restoreLastUsedSettings(CONFIGFILE_NAME)
+                restoreLastUsedSettings(CONFIGFILE_PATH)
             if argument.startswith("-thresh"):
                 try:
                     global user_set_seeding_threshold
@@ -668,37 +682,40 @@ def cmdlineArgumentHandler():
                 except Exception as err:
                     print(err, "Error, likely invalid character or no number after 'thresh' command was put in")
                     sys.exit()
-
     except Exception as err:
         print(err)
 
 
 
-
-# def game_no_longer_running(game_executable):
-
-
-
 async def restoreSettingsonStart():
+
+    # Not currently used, experimenting with async I/O later
+
     if is_seeding_settings_active:
         await asyncio.sleep(20)
-        restoreLastUsedSettings(CONFIGFILE_NAME)
+        restoreLastUsedSettings(CONFIGFILE_PATH)
 
 
 
+def iconAndImageHandler(resolution='720p'):
+    SCRIPT_CURRENT_DIR = os.path.dirname(__file__)
+    images_icons_dict = {
+    'server_in_browser': f'{SCRIPT_CURRENT_DIR}\\icons\\{resolution}\\Server_name.png',
+    'server_browser_button': f'{SCRIPT_CURRENT_DIR}\\icons\\{resolution}\\Server_browser_button.png',
+    'search_bar' : f'{SCRIPT_CURRENT_DIR}\\icons\\{resolution}\\Search_bar.png',
+    'in_server_browser' : f'{SCRIPT_CURRENT_DIR}\\icons\\{resolution}\\In_server_browser.png',
+    'in_server_browser_backup' : f'{SCRIPT_CURRENT_DIR}\\icons\\{resolution}\\In_server_browser.png',
+    'join_modded_server': f'{SCRIPT_CURRENT_DIR}\\icons\\{resolution}\\Modded_server.png',
+    'squad_task_bar_icon': f'{SCRIPT_CURRENT_DIR}\\icons\\{resolution}\\Squad_title_bar.png'
+    }
 
-
-
-
-
-
-
-
-
-
-
-
-
+    return\
+    images_icons_dict['server_in_browser'], \
+    images_icons_dict['server_browser_button'], \
+    images_icons_dict['search_bar'], \
+    images_icons_dict['in_server_browser'], \
+    images_icons_dict['in_server_browser_backup'], \
+    images_icons_dict['join_modded_server'], \
 
 
 
@@ -712,23 +729,14 @@ if __name__ == '__main__':
     script_started_game = False
     CONFIGFILE_NAME = "seedingconfig.ini"
     GAME_URL = "steam://rungameid/393380"
-    server_to_autojoin = 'triggernometry'
+    server_to_autojoin = 'beers & tears'
     # ALTERNATIVE_CONFIGFILE = os.path.abspath("C:\Users\Steffen\AppData\Local\Seedingscript\seedingscript.ini")
-    configFileInitialize(CONFIGFILE_NAME)
-    # configCheckerAndFixer(CONFIGFILE_NAME)
-    attempts_to_join_server = 3
-
-
-
-
-
-
-
-
-
-
-
-
+    # configCheckerAndFixer(CONFIGFILE_PATH)
+    attempts_to_join_server = 4
+    game_start_to_autojoin_delay = 45
+    SCRIPT_CURRENT_DIR = os.path.dirname(__file__)
+    CONFIGFILE_PATH = f'{SCRIPT_CURRENT_DIR}\\{CONFIGFILE_NAME}'
+    InitializeScriptConfigFile(CONFIGFILE_PATH)
 
 
     user_set_seeding_threshold, \
@@ -740,16 +748,17 @@ if __name__ == '__main__':
     is_seeding_settings_active, \
     seeding_random_lower, \
     seeding_random_upper, \
-    game_start_to_button_click_delay, \
+    game_start_to_autojoin_delay, \
     join_server_automatically_enabled, \
-    close_script_if_game_not_running = configReadAndLoad(CONFIGFILE_NAME)
+    close_script_if_game_not_running = configReadAndLoad(CONFIGFILE_PATH)
+
 
 
     try:
         if is_seeding_random_enabled:
             user_set_seeding_threshold = random.randint(seeding_random_lower, seeding_random_upper)
         if is_seeding_settings_active:
-            initializeGameSeedingConfig(CONFIGFILE_NAME)
+            initializeGameSeedingConfig(CONFIGFILE_PATH)
         # Calls the command handler function to see if any arguments were supplied from commandline, if not runs the GUI
         cmdlineArgumentHandler()
 
@@ -757,37 +766,64 @@ if __name__ == '__main__':
         if userinput is None:
             # Initializes an instance of the GUI if there were no commandline arguments
             GUI()
+    except Exception as error:
+        print(error)
 
-
+    try:
+        seeding_settings_restore_time = 0
         if not isProcessRunning(game_executable):
             if is_seeding_settings_active:
-                applySeedingSettings(CONFIGFILE_NAME)
+                applySeedingSettings(CONFIGFILE_PATH)
             startGame(squad_game_launcher_path, GAME_URL)
             script_started_game = True
             if is_seeding_settings_active:
-                time.sleep(20)
-                restoreLastUsedSettings(CONFIGFILE_NAME)
+                seeding_settings_restore_time = 15
+                time.sleep(seeding_settings_restore_time)
+                restoreLastUsedSettings(CONFIGFILE_PATH)
+    except Exception as error:
+        print(error)
 
 
         # Just added in this option so the user could decide how many times the script would attempt to join the server
-        if join_server_automatically_enabled:
-            time.sleep(game_start_to_button_click_delay)
-            users_resolution_width, users_resolution_height = findUsersMonitorResolution()
+
+
+    if join_server_automatically_enabled:
+        # Just to click some inconsequential key in case the monitor is in sleep mode or something
+        pyautogui.press('scroll lock')
+        # So the overall time spent waiting would be more consistent and
+        time.sleep(game_start_to_autojoin_delay - seeding_settings_restore_time)
+        try:
+            forceSquadWindowToTop(findSquadWindowHandle())
             users_game_width, users_game_height = findUsersGameWindowSize()
-            if users_game_width == 1280 and users_game_height == 720:
-                for i in range(attempts_to_join_server):
-                    forceGameWindowToTop()
-                    # The function returns True if it has clicked the server, so i made the assumption that it then has joined it.
-                    if locateAndJoinServer(server_to_autojoin):
-                        break
-            #if users_resolution_width == 2560 and users_resolution_height == 1440:
-                #print('')
+        except IndexError:
+            print('The script tried to fetch your game resolution before it had started properly')
+            print('You may want to increase your delay in the config file.')
+            time.sleep(15)
+            try:
+                forceSquadWindowToTop(findSquadWindowHandle())
+                users_game_width, users_game_height = findUsersGameWindowSize()
+            except Exception as error:
+                print(error)
+        print(f"Detected game resolution is: {users_game_width}x{users_game_height}")
+        forceSquadWindowToTop(findSquadWindowHandle())
+        icons_path = os.path.abspath(f'{SCRIPT_CURRENT_DIR}\icons')
+        joined_server = False
+        resolution_from_folder_name = 0
+        for folder in os.scandir(icons_path):
+            if joined_server:
+                break
+            if os.path.isdir(folder):
+                if folder.name.endswith('p'):
+                    resolution_from_folder_name = int(folder.name.strip('p'))
+                if users_game_height == resolution_from_folder_name:
+                    for i in range(attempts_to_join_server):
+                        print(f'Initiating attempt to autojoin server: {server_to_autojoin}')
+                        if locateAndJoinServer(server_to_autojoin, *iconAndImageHandler(folder.name), resolution_from_folder_name):
+                            joined_server = True
+                            break
+                        time.sleep(60)
+                    print('Script was unable to automatically join the server')
 
-
-
-
-    except Exception as error: # Will happen if the game is not already running. This just tells the program
-        print(error)           # to carry on if that's the case.
 
     print(f"Your activation threshold is:  {user_set_seeding_threshold}")
     while True:
@@ -795,7 +831,7 @@ if __name__ == '__main__':
             if close_script_if_game_not_running:
                 if not isProcessRunning(game_executable):
                     if is_seeding_settings_active:
-                        restoreLastUsedSettings(CONFIGFILE_NAME)
+                        restoreLastUsedSettings(CONFIGFILE_PATH)
                     sys.exit("Game not running, shutting down script")
             now = datetime.datetime.now()
             current_time = now.strftime("%H:%M")
@@ -805,12 +841,15 @@ if __name__ == '__main__':
                 if userinput == 'close':
                     gameclose(game_executable)
                     if script_started_game:
-                        restoreLastUsedSettings(CONFIGFILE_NAME)
-                        sys.exit('Game has been closed and the settings restored')
-                    sys.exit("Game has been closed")
+                        restoreLastUsedSettings(CONFIGFILE_PATH)
+                        print('Settings have been restored. Closing down program')
+                        sys.exit()
+                    else:
+                        print('Game have been closed. Shutting down script')
+                        sys.exit()
                 elif userinput == 'shutdown':
-                    if script_started_game:
-                        restoreLastUsedSettings(CONFIGFILE_NAME)
+                    if not script_started_game:
+                        restoreLastUsedSettings(CONFIGFILE_PATH)
                         print('Settings have been restored.')
                     shutdown()
         except Exception as error:
