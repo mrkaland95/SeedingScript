@@ -46,9 +46,19 @@ def findAndClickServerBrowser(server_browser_button):
     except TypeError:
         return False
 
-def findAndClickServerName(server_pic, modded_server, picture_size):
-    x_buffer = 0
-    y_buffer = 0
+def findAndClickServerName(server_pic, modded_server, picture_height):
+    x_offset = 100
+    y_offset = 110
+
+    if picture_height == 900:
+        y_offset += 15
+    elif picture_height == 1080:
+        y_offset += 50
+        x_offset += 40
+    elif picture_height == 1440:
+        y_offset += 110
+        x_offset += 80
+
 
     try:
         forceSquadWindowToTop(findSquadWindowHandle())
@@ -56,9 +66,11 @@ def findAndClickServerName(server_pic, modded_server, picture_size):
         x, y = pyautogui.locateCenterOnScreen(server_pic, confidence=0.5, grayscale=True)
         mouse.doubleClick(x, y)
         try:
-            x, y = pyautogui.locateOnScreen(modded_server, confidence=0.7, grayscale=True)
-            pyautogui.click(x, y)
+            x, y, w, h = pyautogui.locateOnScreen(modded_server, confidence=0.7, grayscale=True)
+            pyautogui.moveTo(x + x_offset, y + y_offset, 1, pyautogui.easeInOutQuad)
+            pyautogui.click()
         except TypeError:
+            print('Modded join screen not found')
             pass
         return True
     except TypeError:
@@ -67,18 +79,19 @@ def findAndClickServerName(server_pic, modded_server, picture_size):
 def findAndClickSearchBar(search_bar_pic, game_resolution):
     x_offset = 60
     y_offset = 10
-
     if game_resolution == 1440:
-        y_offset += 50
-
+        y_offset += 40
+    elif game_resolution == 1080:
+        y_offset += 20
+    elif game_resolution == 900:
+        y_offset += 10
 
     try:
-
         forceSquadWindowToTop(findSquadWindowHandle())
         mouse = pyautogui
-        x1, y1, w1, h1 = pyautogui.locateOnScreen(search_bar_pic, confidence=0.8, grayscale=True)
-        mouse.moveTo(x1+x_offset, y1+y_offset, 1, pyautogui.easeInOutQuad)
-        mouse.click()
+        x1, y1, w1, h1 = pyautogui.locateOnScreen(search_bar_pic, confidence=0.75, grayscale=True)
+        mouse.click(x1+x_offset, y1+y_offset)
+        print('Found searchbar')
         return True
     except TypeError:
         return False
@@ -152,7 +165,6 @@ def forceSquadWindowToTop(window_handle):
     shell.SendKeys('%')
     win32gui.SetForegroundWindow(window_handle)
     win32gui.ShowWindow(window_handle, 9)
-    return window_handle
 
 
 
@@ -499,7 +511,7 @@ if __name__ == '__main__':
     SERVER_TO_AUTOJOIN = 'les indies'
     SCRIPT_CURRENT_DIR = os.path.dirname(__file__)
     attempts_to_join_server = 4
-    server_to_autojoin = 'beers & tears'
+    server_to_autojoin = 'les indies'
 
 
     # game_icon_in_taskbar = iconAndImageHandler('1440p')[7]
@@ -516,16 +528,27 @@ if __name__ == '__main__':
     for folder in os.scandir(icon_path):
         if joined_server:
             break
-
         if os.path.isdir(folder):
             if folder.name.endswith('p'):
                 resolution_from_folder_name = int(folder.name.lower().strip('p'))
+
+
+
+            server_name = iconAndImageHandler(folder.name)[0]
+            modded_server = iconAndImageHandler(folder.name)[5]
+            if findAndClickServerName(server_name,modded_server, resolution_from_folder_name):
+                break
+
+
+
+
+            """
             if users_game_height == resolution_from_folder_name:
                 for i in range(attempts_to_join_server):
                     if locateAndJoinServer(server_to_autojoin, *iconAndImageHandler(folder.name), resolution_from_folder_name):
                         break
                     time.sleep(60)
-
+            """
 
 
 

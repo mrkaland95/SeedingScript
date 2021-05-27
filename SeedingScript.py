@@ -118,16 +118,18 @@ def InitializeScriptConfigFile(configfile_name):
     :return:
     """
     config = configparser.ConfigParser()
+    config.optionxform = str
+
     if not os.path.isfile(configfile_name):  # checks if the config file exists'
         username = os.environ['USERPROFILE']
         path = os.path.abspath(f"{username}/AppData/Local/SquadGame/Saved/Config/WindowsNoEditor/")
         # hopefully default path to the game's config file. Worked for my own PCs so far.
-        print("Initializing config file. This will be created in the same folder as you ran the program from. \
-        It will create a new one if it can't be found in the same folder as the program")
+        print("Initializing config file. This will be created in the same folder as you ran the program from.\r")
+        print("The program will create a new file, if one can't be found in the same folder as the program is running from")
 
 
         config['SETTINGS'] = {'seeding_threshold': '65',
-        '; The Threshold where the action you chosen will be taken, i.e when the game will be shut down or the pc shut down. \n'
+        '; The threshold of players, at which the desired action(shutdown or close) will be taken. Overriden by the "seeding_random_enabled" setting if that is set to "true" \n'
         "\n"
         'server_address': 'r2f.tacticaltriggernometry.com',
         "; The server's address. Generally don't touch, but can be changed if we get a new host.\n"
@@ -136,51 +138,72 @@ def InitializeScriptConfigFile(configfile_name):
         "; Same as before, generally don't touch.\n"
         "\n"
         'sleep_interval': '60',
-        "; Determines how often the program will query the server, in seconds.\n"
+        "; Determines how often the main program loop will run, and with this how often it will query the server, defined in seconds.\n"
         "\n"
         'is_seeding_random_enabled': 'true',
-        "; This determines whether a random integer between 48 and 98 will be used for the the chosen action.\n"
-        "; I put this here just to make the spread of when people leave a little wider, "
-        "but not necessary. Overrides previous threshold in the file.\n"
+        "; This determines whether a random integer between the lower and upper limits will be used for your seeding threshold.\n"
+        "; This option is here to slightly increase the spread of when people disconnect from the server, for obvious reasons.\n"
+        "; Do note that this setting overrides the seeding threshold set further up in the file. \n"
         "\n"
         'seeding_random_upper_limit': '95',
         'seeding_random_lower_limit': '60',
-        'lightweight_seeding_settings': 'false\n',
-        "; Currently a bit experimental. Essentially this determines whether lightweight seeding settings\n"
-        "; will be applied when the game starts. Will for example apply a 20 FPS frame limit, and turn master volume to 0, amongst other things.\n"
-        "; the program should be able to your path to your config file automatically.\n"
-        "; However, if you choose to use this, i highly recommend you create a backup of your\n"
-        "; 'GameUserSettings.ini' file. One will also be created upon initialization, but create one manually just to be safe.\n"
-        "; Things can break if the program is closed manually, trying to figure out a way to remedy this.\n"
-        "\n"
+        '; These decide the upper and lower limits of the chosen integer for seeding threshold, if the "seeding_random_enabled" parameter is enabled\r'
+        '\r'
+        'lightweight_seeding_settings': 'false',
+        "; Slightly experimental functionality. Basically allows the program to create a swapfile of lightweight 'seeding' settings before starting your game\n"
+        "; Some examples of settings affected by this file: a 20 FPS frame limit, master volume to 0, and 50% resolution scaling and lowered resolution(1280x720) by default\n"
+        "; The program should be able to find your config file folder automatically, using the windows environment variable, but if it doesen't, feel free to adjust this in the 'others section\n"
+        "; Should you wish to change any of the 'seeding' settings, go to the backup folder in your 'WindowsNoEditor' folder where the config files are stored\r"
+        "; There your desired seeding settings can be changed in the 'GameUserSettingsSwapFile.ini' file"
+        "; Do note, if you choose to use this functionality, it's recommended you create a backup of your 'GameUserSettings.ini' file just to safe\n"
+        "; A backup will also be created upon initialization after the setting has been enabled, but create one manually just to be safe.\n"
+        "; There are some safeguards in place to ensure your proper settings are never lost, but has not been tested throughly enough yet to guarantee 100%\n"
+        "\r"
+        
         'join_server_automatically_enabled': 'false',
-        '; This allows you to automatically join the server. Note, this will ONLY work if TT is set to favourite \n'
-        '; Aswell as favourites only being activated in the browser.\n'
+        '; This allows you to automatically join the server a desired server. Do note that this works by reading your screen, or more specifically looking for specific matches of pictures on your screen \n' \
+        '; The script will also control your mouse when doing this, so you may want to minimalize your use of the computer during this process\n' \
+        '; This can at any point be cancelled by clicking the combination "CTRL+ALT+SPACE"\n' \
         '\n'
-        'game_start_to_autojoin_delay': '45',
-        '; The delay for how long the program will wait before it tries to join the server\n'
-        '; You might want to change this as needed depending on how fast your computer is.\n'
+        
+        'game_start_to_autojoin_delay': '60',
+        '; This is the amount of seconds from when the *game* client starts(not the launcher and anti-cheat client). \n'
+        '; to when the script starts attempting to autojoin the desired server. Might want to be changed on computers with slower hardware\n'
+        '\r'
+        
+        'server_handle_to_autojoin': 'triggernometry',
+        '; This is the handle the script uses when searching for the desired server. Ideally it should uniquely identify\r'
+        '; The desired server, but it is not a strict requirement. The server can also be changed, but the "Server_name.png" icon\r'
+        '; in the "icons" folder must also be changed to reflect this, since both is used to find the desired server\r'
+        '; The easiest way to do this, is to use a software like "ShareX" and take a cropped screenshot of the desired server and desired resolution\r'
+        
+        '\n'
         'close_script_if_game_not_running' : 'true',
-        '\n'
         '; Essentially lets you chose if the script will close itself gracefully if the game is found not to be running by the time\n'
-        '; the main loop starts.\n'
-        'attempts_to_auto_join_server': '3\n'
-        '\n'
-        '; The amount of attempts the program will try to join the server automatically before giving up\n'}
+        '; the main loop starts.\r'
+        '\r'
+        'attempts_to_auto_join_server': '3\r'
+        '; The amount of times the program will try to join the server automatically before giving up\n'}
 
 
 
 
         config['OTHER'] = {
         'desired_action': 'None',
+        '; If you do not wish to have the GUI opened, the wanted action can be specified here. Must be either "shutdown" or "close"\r'
         'game_executable': 'SquadGame.exe',
+        '\r'
         'squad_install': 'C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe',
         '; The install path to the game, replace this if applicable, usually if the game is installed on a different drive \n'
         "; Make sure to include 'squad_launcher.exe' at the end of the path.\n"
         "\n"
-        'game_config_path': f"{path}\n"
+        'game_config_path': f"{path}",
         "; The path to your config file folder. The program should hopefully be able to find this\n"
-        "; But change this to the correct one if errors start being thrown.\n"}
+        "; But change this to the correct one if errors start being thrown.\r"
+        '\r'
+        'steam_game_url_handle': 'steam://rungameid/393380\r'
+        '; This is the url handle the script will try and tell Steam to start. Should this change for whatever reason, change this here\r'
+        }
         with open(CONFIGFILE_PATH, "w") as configfile:
             config.write(configfile)
         return
@@ -336,6 +359,15 @@ def configReadAndLoad(configfile_name):
     """
     config = configparser.ConfigParser()
     config.read(configfile_name)
+    global userinput
+    if config['OTHER']['desired_action'] == 'close':
+        userinput = 'close'
+    elif config['OTHER']['desired_action'] == 'shutdown':
+        userinput = 'shutdown'
+
+
+
+
     return\
         int(config['SETTINGS']['seeding_threshold']),\
         (config['SETTINGS']["server_address"], int(config['SETTINGS']['port'])), \
@@ -348,7 +380,8 @@ def configReadAndLoad(configfile_name):
         int(config['SETTINGS']['seeding_random_upper_limit']), \
         int(config['SETTINGS']['game_start_to_autojoin_delay']), \
         config.getboolean('SETTINGS', 'join_server_automatically_enabled'), \
-        config.getboolean('SETTINGS', 'close_script_if_game_not_running')
+        config.getboolean('SETTINGS', 'close_script_if_game_not_running'), \
+        int(config['SETTINGS']['attempts_to_auto_join_server'])
 
 
 
@@ -455,7 +488,6 @@ def findCurrentPlayercount(server):
 
 
 
-
 def findAndClickServerBrowser(server_browser_button):
     """
     Tries and find the server browser button from the supplied image, and clicks it and returns True if it can.
@@ -465,52 +497,81 @@ def findAndClickServerBrowser(server_browser_button):
     """
     try:
         forceSquadWindowToTop(findSquadWindowHandle())
+        time.sleep(0.2)
         mouse = pyautogui
         x1, y1 = pyautogui.locateCenterOnScreen(server_browser_button, confidence=0.5, grayscale=True)
-        mouse.click(x1, (y1 + 3))
+        mouse.click(x1, y1+3)
+        print('Found server browser from main menu')
         return True
     except TypeError:
         return False
 
-def findAndClickServerName(server_name_icon, modded_server_icon, game_resolution):
-    x_buffer = 0
-    y_buffer = 0
-    forceSquadWindowToTop(findSquadWindowHandle())
+def findAndClickServerName(server_pic, modded_server, picture_height):
+    x_offset = 100
+    y_offset = 110
+
+    if picture_height == 900:
+        y_offset += 15
+    elif picture_height == 1080:
+        y_offset += 50
+        x_offset += 40
+    elif picture_height == 1440:
+        y_offset += 110
+        x_offset += 80
+
+
     try:
+        forceSquadWindowToTop(findSquadWindowHandle())
         mouse = pyautogui
-        x2, y2 = pyautogui.locateCenterOnScreen(server_name_icon, confidence=0.5, grayscale=True)
-        mouse.moveTo(x2, y2)
-        mouse.doubleClick()
+        x, y = pyautogui.locateCenterOnScreen(server_pic, confidence=0.5, grayscale=True)
+        mouse.doubleClick(x, y)
+        print('Found the server in the browser')
+        time.sleep(0.5)
         try:
-            x, y = pyautogui.locateOnScreen(modded_server_icon, confidence=0.7, grayscale=True)
-            pyautogui.moveTo(x, y)
+            x, y, w, h = pyautogui.locateOnScreen(modded_server, confidence=0.7, grayscale=True)
+            pyautogui.moveTo(x + x_offset, y + y_offset, 1, pyautogui.easeInOutQuad)
             pyautogui.click()
+            print('Joining found modded server')
         except TypeError:
+            print('No mod on server detected')
             pass
         return True
     except TypeError:
         return False
 
-def findAndClickSearchBar(search_bar_pic):
+def findAndClickSearchBar(search_bar_pic, game_resolution):
+    x_offset = 150
+    y_offset = 10
+    if game_resolution == 1440:
+        y_offset += 40
+    elif game_resolution == 1080:
+        y_offset += 20
+    elif game_resolution == 900:
+        y_offset += 10
     try:
         forceSquadWindowToTop(findSquadWindowHandle())
         mouse = pyautogui
-        x1, y1, w1, h1 = pyautogui.locateOnScreen(search_bar_pic, confidence=0.8, grayscale=True)
-        mouse.click(x1+60, y1+10)
+        x1, y1, w1, h1 = pyautogui.locateOnScreen(search_bar_pic, confidence=0.75, grayscale=True)
+        mouse.click(x1+x_offset, y1+y_offset)
+        print('Found search bar')
         return True
     except TypeError:
+        print('Could not find search bar')
         return False
 
 
 def checkIfAlreadyInBrowser(in_server_browser_pic, in_server_browser_pic2):
     try:
         x, y = pyautogui.locateCenterOnScreen(in_server_browser_pic, confidence=0.7, grayscale=True)
+        print('User already in server browser')
         return True
     except TypeError:
         try:
             x, y = pyautogui.locateCenterOnScreen(in_server_browser_pic2, confidence=0.7, grayscale=True)
+            print('User already in server browser')
             return True
         except TypeError:
+            print('User not in server browser')
             return False
 
 
@@ -518,6 +579,7 @@ def checkIfAlreadyInBrowser(in_server_browser_pic, in_server_browser_pic2):
 
 
 def writeServerToSearchBar(server_name):
+    print(f'Attempting to write the desired phrase {server_name} to the search bar')
     for letter in server_name:
         pyautogui.press(letter)
         time.sleep(random.uniform(0.1, 0.25))
@@ -578,6 +640,7 @@ def cleanSearchBar(length_to_clean):
     Cleans the address/search bar that is currently active, up to a certain amount of characters
     :return:
     """
+    print('Attempting to clean the search bar')
     for i in range(length_to_clean):
         pyautogui.press('backspace')
 
@@ -606,34 +669,36 @@ def locateAndJoinServer(server_string_to_autojoin, server_name_picture,
 
     # Did this, so the script would check
     forceSquadWindowToTop(findSquadWindowHandle())
+    time.sleep(0.2)
     if checkIfAlreadyInBrowser(in_server_browser, in_server_browser_backup):
-        for i in range(50):
+        for i in range(10):
             if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                 return True
-            time.sleep(0.1)
-        if findAndClickSearchBar(search_bar):
+            time.sleep(0.5)
+        if findAndClickSearchBar(search_bar, game_resolution):
             pyautogui.move(100, 0)
             cleanSearchBar(25)
             writeServerToSearchBar(server_string_to_autojoin)
-            for i in range(50):
+            for i in range(10):
                 if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                     return True
-                time.sleep(0.1)
+                time.sleep(0.5)
+    forceSquadWindowToTop(findSquadWindowHandle())
+    time.sleep(0.2)
     if findAndClickServerBrowser(server_browser_button):
         time.sleep(20)
-        for i in range(30):
+        for i in range(13): # Tries to find the server for about 4 seconds before looking for the search bar
             if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                 return True
-            time.sleep(0.1)
-        for i in range(100):
-            if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
-                pyautogui.move(100, 0)
-                cleanSearchBar(25)
-                writeServerToSearchBar(server_string_to_autojoin)
-        for i in range(50):
+            time.sleep(0.3)
+        if findAndClickSearchBar(search_bar, game_resolution):
+            cleanSearchBar(25)
+            writeServerToSearchBar(server_string_to_autojoin)
+            time.sleep(15)
+        for i in range(20):
             if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                 return True
-            time.sleep(0.1)
+            time.sleep(0.5)
 
 
 
@@ -725,15 +790,14 @@ def iconAndImageHandler(resolution='720p'):
 
 if __name__ == '__main__':
     # Just initializing variables that will be used and checked later.
+    threshold_not_hit = True
     userinput = None
     script_started_game = False
     CONFIGFILE_NAME = "seedingconfig.ini"
     GAME_URL = "steam://rungameid/393380"
-    server_to_autojoin = 'beers & tears'
+    server_to_autojoin = 'triggernometry'
     # ALTERNATIVE_CONFIGFILE = os.path.abspath("C:\Users\Steffen\AppData\Local\Seedingscript\seedingscript.ini")
     # configCheckerAndFixer(CONFIGFILE_PATH)
-    attempts_to_join_server = 4
-    game_start_to_autojoin_delay = 45
     SCRIPT_CURRENT_DIR = os.path.dirname(__file__)
     CONFIGFILE_PATH = f'{SCRIPT_CURRENT_DIR}\\{CONFIGFILE_NAME}'
     InitializeScriptConfigFile(CONFIGFILE_PATH)
@@ -750,7 +814,8 @@ if __name__ == '__main__':
     seeding_random_upper, \
     game_start_to_autojoin_delay, \
     join_server_automatically_enabled, \
-    close_script_if_game_not_running = configReadAndLoad(CONFIGFILE_PATH)
+    close_script_if_game_not_running,\
+    attempts_to_join_server = configReadAndLoad(CONFIGFILE_PATH)
 
 
 
@@ -769,19 +834,17 @@ if __name__ == '__main__':
     except Exception as error:
         print(error)
 
-    try:
-        seeding_settings_restore_time = 0
-        if not isProcessRunning(game_executable):
-            if is_seeding_settings_active:
-                applySeedingSettings(CONFIGFILE_PATH)
-            startGame(squad_game_launcher_path, GAME_URL)
-            script_started_game = True
-            if is_seeding_settings_active:
-                seeding_settings_restore_time = 15
-                time.sleep(seeding_settings_restore_time)
-                restoreLastUsedSettings(CONFIGFILE_PATH)
-    except Exception as error:
-        print(error)
+    seeding_settings_restore_time = 0
+    if not isProcessRunning(game_executable):
+        if is_seeding_settings_active:
+            applySeedingSettings(CONFIGFILE_PATH)
+        startGame(squad_game_launcher_path, GAME_URL)
+        script_started_game = True
+        if is_seeding_settings_active:
+            seeding_settings_restore_time = 15
+            time.sleep(seeding_settings_restore_time)
+            restoreLastUsedSettings(CONFIGFILE_PATH)
+
 
 
         # Just added in this option so the user could decide how many times the script would attempt to join the server
@@ -813,20 +876,22 @@ if __name__ == '__main__':
             if joined_server:
                 break
             if os.path.isdir(folder):
+                users_game_width, users_game_height = findUsersGameWindowSize()
                 if folder.name.endswith('p'):
                     resolution_from_folder_name = int(folder.name.strip('p'))
                 if users_game_height == resolution_from_folder_name:
                     for i in range(attempts_to_join_server):
-                        print(f'Initiating attempt to autojoin server: {server_to_autojoin}')
+                        print(f'Initiating attempt to autojoin server with phrase: {server_to_autojoin}')
+                        print(f'Attempt #: {i+1}')
                         if locateAndJoinServer(server_to_autojoin, *iconAndImageHandler(folder.name), resolution_from_folder_name):
                             joined_server = True
                             break
                         time.sleep(60)
-                    print('Script was unable to automatically join the server')
+                    # print('Script was unable to automatically join the server')
 
 
     print(f"Your activation threshold is:  {user_set_seeding_threshold}")
-    while True:
+    while threshold_not_hit:
         try:
             if close_script_if_game_not_running:
                 if not isProcessRunning(game_executable):
@@ -843,10 +908,10 @@ if __name__ == '__main__':
                     if script_started_game:
                         restoreLastUsedSettings(CONFIGFILE_PATH)
                         print('Settings have been restored. Closing down program')
-                        sys.exit()
+                        threshold_not_hit = False
                     else:
                         print('Game have been closed. Shutting down script')
-                        sys.exit()
+                        threshold_not_hit = False
                 elif userinput == 'shutdown':
                     if not script_started_game:
                         restoreLastUsedSettings(CONFIGFILE_PATH)
