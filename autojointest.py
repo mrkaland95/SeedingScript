@@ -509,9 +509,14 @@ if __name__ == '__main__':
     CONFIGFILE_NAME = "seedingconfig.ini"
     #SERVER_TO_AUTOJOIN = 'triggernometry'
     SERVER_TO_AUTOJOIN = 'les indies'
-    SCRIPT_CURRENT_DIR = os.path.dirname(__file__)
+    #SCRIPT_CURRENT_DIR = os.path.dirname(__file__)
     attempts_to_join_server = 4
-    server_to_autojoin = 'les indies'
+    SCRIPT_CURRENT_DIR = sys.argv[0].strip(os.path.basename(__file__))
+
+    print(SCRIPT_CURRENT_DIR)
+
+
+
 
 
     # game_icon_in_taskbar = iconAndImageHandler('1440p')[7]
@@ -520,35 +525,8 @@ if __name__ == '__main__':
     #print(game_width, game_height)
 
 
-    forceSquadWindowToTop(findSquadWindowHandle())
-    users_game_width, users_game_height = findUsersGameWindowSize()
-    forceSquadWindowToTop(findSquadWindowHandle())
-    icon_path = os.path.abspath(f'{SCRIPT_CURRENT_DIR}\icons')
-    joined_server = False
-    for folder in os.scandir(icon_path):
-        if joined_server:
-            break
-        if os.path.isdir(folder):
-            if folder.name.endswith('p'):
-                resolution_from_folder_name = int(folder.name.lower().strip('p'))
 
 
-
-            server_name = iconAndImageHandler(folder.name)[0]
-            modded_server = iconAndImageHandler(folder.name)[5]
-            if findAndClickServerName(server_name,modded_server, resolution_from_folder_name):
-                break
-
-
-
-
-            """
-            if users_game_height == resolution_from_folder_name:
-                for i in range(attempts_to_join_server):
-                    if locateAndJoinServer(server_to_autojoin, *iconAndImageHandler(folder.name), resolution_from_folder_name):
-                        break
-                    time.sleep(60)
-            """
 
 
 

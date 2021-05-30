@@ -11,6 +11,7 @@ import sys
 from collections import OrderedDict
 from tkinter import *
 import a2s
+import keyboard
 import psutil
 import pyautogui
 import win32com.client
@@ -359,12 +360,13 @@ def configReadAndLoad(configfile_name):
     """
     config = configparser.ConfigParser()
     config.read(configfile_name)
-    global userinput
+
+
+    userinput = None
     if config['OTHER']['desired_action'] == 'close':
         userinput = 'close'
     elif config['OTHER']['desired_action'] == 'shutdown':
         userinput = 'shutdown'
-
 
 
 
@@ -381,7 +383,9 @@ def configReadAndLoad(configfile_name):
         int(config['SETTINGS']['game_start_to_autojoin_delay']), \
         config.getboolean('SETTINGS', 'join_server_automatically_enabled'), \
         config.getboolean('SETTINGS', 'close_script_if_game_not_running'), \
-        int(config['SETTINGS']['attempts_to_auto_join_server'])
+        int(config['SETTINGS']['attempts_to_auto_join_server']), \
+        config['SETTINGS']['server_handle_to_autojoin'], \
+        userinput
 
 
 
@@ -737,11 +741,11 @@ def cmdlineArgumentHandler():
                 print("Your computer will shut down upon hitting the threshold")
             if argument == "-restorelast":
                 restoreLastUsedSettings(CONFIGFILE_PATH)
-            if argument.startswith("-thresh"):
+            if argument.startswith("-thresh-"):
                 try:
                     global user_set_seeding_threshold
                     global is_seeding_random_enabled
-                    thresh = argument[7:]
+                    thresh = argument[8:]
                     user_set_seeding_threshold = int(thresh)
                     is_seeding_random_enabled = False
                 except Exception as err:
@@ -763,7 +767,7 @@ async def restoreSettingsonStart():
 
 
 def iconAndImageHandler(resolution='720p'):
-    SCRIPT_CURRENT_DIR = os.path.dirname(__file__)
+    # SCRIPT_CURRENT_DIR = os.path.dirname(__file__)
     images_icons_dict = {
     'server_in_browser': f'{SCRIPT_CURRENT_DIR}\\icons\\{resolution}\\Server_name.png',
     'server_browser_button': f'{SCRIPT_CURRENT_DIR}\\icons\\{resolution}\\Server_browser_button.png',
@@ -783,6 +787,20 @@ def iconAndImageHandler(resolution='720p'):
     images_icons_dict['join_modded_server'], \
 
 
+def watchForInterrupt():
+    global stop_program
+    stop_program = False
+    while not stop_program:
+        if keyboard.is_pressed('ctrl+shift+space'):
+            print('ctrl+shift+space')
+            stop_program = True
+            sys.exit()
+        time.sleep(0.05)
+
+
+
+
+
 
 
 
@@ -798,11 +816,20 @@ if __name__ == '__main__':
     server_to_autojoin = 'triggernometry'
     # ALTERNATIVE_CONFIGFILE = os.path.abspath("C:\Users\Steffen\AppData\Local\Seedingscript\seedingscript.ini")
     # configCheckerAndFixer(CONFIGFILE_PATH)
-    SCRIPT_CURRENT_DIR = os.path.dirname(__file__)
-    CONFIGFILE_PATH = f'{SCRIPT_CURRENT_DIR}\\{CONFIGFILE_NAME}'
+    pyautogui.FAILSAFE = False
+
+
+    if sys.argv[0].endswith('exe') and 'python.exe' not in sys.argv[0]:
+        SCRIPT_CURRENT_DIR = os.path.dirname(sys.executable)
+        CONFIGFILE_PATH = os.path.join(f'{SCRIPT_CURRENT_DIR}\\{CONFIGFILE_NAME}')
+    else:
+        SCRIPT_CURRENT_DIR = os.path.dirname(__file__)
+        CONFIGFILE_PATH = os.path.join(f'{SCRIPT_CURRENT_DIR}\\{CONFIGFILE_NAME}')
+    icons_path = os.path.join(f'{SCRIPT_CURRENT_DIR}\\icons')
+
+
+
     InitializeScriptConfigFile(CONFIGFILE_PATH)
-
-
     user_set_seeding_threshold, \
     address, \
     sleep_interval, \
@@ -815,8 +842,9 @@ if __name__ == '__main__':
     game_start_to_autojoin_delay, \
     join_server_automatically_enabled, \
     close_script_if_game_not_running,\
-    attempts_to_join_server = configReadAndLoad(CONFIGFILE_PATH)
-
+    attempts_to_join_server, \
+    server_to_autojoin, \
+    userinput = configReadAndLoad(CONFIGFILE_PATH)
 
 
     try:
@@ -847,13 +875,13 @@ if __name__ == '__main__':
 
 
 
-        # Just added in this option so the user could decide how many times the script would attempt to join the server
 
 
     if join_server_automatically_enabled:
         # Just to click some inconsequential key in case the monitor is in sleep mode or something
         pyautogui.press('scroll lock')
-        # So the overall time spent waiting would be more consistent and
+
+        # I did this so the overall time spent waiting would be more consistent on around start
         time.sleep(game_start_to_autojoin_delay - seeding_settings_restore_time)
         try:
             forceSquadWindowToTop(findSquadWindowHandle())
@@ -869,7 +897,6 @@ if __name__ == '__main__':
                 print(error)
         print(f"Detected game resolution is: {users_game_width}x{users_game_height}")
         forceSquadWindowToTop(findSquadWindowHandle())
-        icons_path = os.path.abspath(f'{SCRIPT_CURRENT_DIR}\icons')
         joined_server = False
         resolution_from_folder_name = 0
         for folder in os.scandir(icons_path):
@@ -881,6 +908,7 @@ if __name__ == '__main__':
                     resolution_from_folder_name = int(folder.name.strip('p'))
                 if users_game_height == resolution_from_folder_name:
                     for i in range(attempts_to_join_server):
+                        users_game_width, users_game_height = findUsersGameWindowSize()
                         print(f'Initiating attempt to autojoin server with phrase: {server_to_autojoin}')
                         print(f'Attempt #: {i+1}')
                         if locateAndJoinServer(server_to_autojoin, *iconAndImageHandler(folder.name), resolution_from_folder_name):
