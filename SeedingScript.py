@@ -127,29 +127,39 @@ def InitializeScriptConfigFile(configfile_name):
         # hopefully default path to the game's config file. Worked for my own PCs so far.
         print("Initializing config file. This will be created in the same folder as you ran the program from.\r")
         print("The program will create a new file, if one can't be found in the same folder as the program is running from")
-
-
-        config['SETTINGS'] = {'seeding_threshold': '65',
+        config['SETTINGS'] = {'seeding_threshold': '80',
         '; The threshold of players, at which the desired action(shutdown or close) will be taken. Overriden by the "seeding_random_enabled" setting if that is set to "true" \n'
         "\n"
+        
+        
         'server_address': 'r2f.tacticaltriggernometry.com',
         "; The server's address. Generally don't touch, but can be changed if we get a new host.\n"
         "\n"
+        
+        
         'port': '27165',
         "; Same as before, generally don't touch.\n"
         "\n"
+        
+        
         'sleep_interval': '60',
         "; Determines how often the main program loop will run, and with this how often it will query the server, defined in seconds.\n"
         "\n"
+        
+        
         'is_seeding_random_enabled': 'true',
         "; This determines whether a random integer between the lower and upper limits will be used for your seeding threshold.\n"
         "; This option is here to slightly increase the spread of when people disconnect from the server, for obvious reasons.\n"
         "; Do note that this setting overrides the seeding threshold set further up in the file. \n"
         "\n"
-        'seeding_random_upper_limit': '95',
+        
+        
+        'seeding_random_upper_limit': '98',
         'seeding_random_lower_limit': '60',
         '; These decide the upper and lower limits of the chosen integer for seeding threshold, if the "seeding_random_enabled" parameter is enabled\r'
         '\r'
+        
+        
         'lightweight_seeding_settings': 'false',
         "; Slightly experimental functionality. Basically allows the program to create a swapfile of lightweight 'seeding' settings before starting your game\n"
         "; Some examples of settings affected by this file: a 20 FPS frame limit, master volume to 0, and 50% resolution scaling and lowered resolution(1280x720) by default\n"
@@ -161,16 +171,19 @@ def InitializeScriptConfigFile(configfile_name):
         "; There are some safeguards in place to ensure your proper settings are never lost, but has not been tested throughly enough yet to guarantee 100%\n"
         "\r"
         
+        
         'join_server_automatically_enabled': 'false',
         '; This allows you to automatically join the server a desired server. Do note that this works by reading your screen, or more specifically looking for specific matches of pictures on your screen \n' \
         '; The script will also control your mouse when doing this, so you may want to minimalize your use of the computer during this process\n' \
         '; This can at any point be cancelled by clicking the combination "CTRL+ALT+SPACE"\n' \
         '\n'
         
+        
         'game_start_to_autojoin_delay': '60',
         '; This is the amount of seconds from when the *game* client starts(not the launcher and anti-cheat client). \n'
         '; to when the script starts attempting to autojoin the desired server. Might want to be changed on computers with slower hardware\n'
         '\r'
+        
         
         'server_handle_to_autojoin': 'triggernometry',
         '; This is the handle the script uses when searching for the desired server. Ideally it should uniquely identify\r'
@@ -178,11 +191,20 @@ def InitializeScriptConfigFile(configfile_name):
         '; in the "icons" folder must also be changed to reflect this, since both is used to find the desired server\r'
         '; The easiest way to do this, is to use a software like "ShareX" and take a cropped screenshot of the desired server and desired resolution\r'
         
+        
         '\n'
         'close_script_if_game_not_running' : 'true',
         '; Essentially lets you chose if the script will close itself gracefully if the game is found not to be running by the time\n'
         '; the main loop starts.\r'
         '\r'
+        
+        
+        'autojoin_if_already_ingame': 'false',
+        '; This determines whether the script will attempt to autojoin the desired server even if the user already has the game started up.'
+        '\r'
+        
+        
+        
         'attempts_to_auto_join_server': '3\r'
         '; The amount of times the program will try to join the server automatically before giving up\n'}
 
@@ -197,13 +219,18 @@ def InitializeScriptConfigFile(configfile_name):
         'squad_install': 'C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe',
         '; The install path to the game, replace this if applicable, usually if the game is installed on a different drive \n'
         "; Make sure to include 'squad_launcher.exe' at the end of the path.\n"
+        '; As of seedingscript version 2.5, this is no longer necessary, but is there as a backup should the steam one no longer work.\r'
         "\n"
         'game_config_path': f"{path}",
         "; The path to your config file folder. The program should hopefully be able to find this\n"
         "; But change this to the correct one if errors start being thrown.\r"
         '\r'
-        'steam_game_url_handle': 'steam://rungameid/393380\r'
+        'steam_game_url_handle': 'steam://rungameid/393380',
         '; This is the url handle the script will try and tell Steam to start. Should this change for whatever reason, change this here\r'
+        '\r'
+        'config_version': '2.6\r'
+
+
         }
         with open(CONFIGFILE_PATH, "w") as configfile:
             config.write(configfile)
@@ -214,6 +241,11 @@ def InitializeScriptConfigFile(configfile_name):
 
 
 def initializeGameSeedingConfig(configfile_name):
+    """
+    Initializes the gameconfig files for setting applying seeding settings, if applicable.
+    :param configfile_name:
+    :return:
+    """
     config = configparser.ConfigParser()
     config.read(configfile_name)
 
@@ -384,7 +416,8 @@ def configReadAndLoad(configfile_name):
         config.getboolean('SETTINGS', 'join_server_automatically_enabled'), \
         config.getboolean('SETTINGS', 'close_script_if_game_not_running'), \
         int(config['SETTINGS']['attempts_to_auto_join_server']), \
-        config['SETTINGS']['server_handle_to_autojoin'], \
+        config['SETTINGS']['server_handle_to_autojoin'],\
+        config['SETTINGS']['autojoin_if_already_ingame'],\
         userinput
 
 
@@ -799,25 +832,66 @@ def watchForInterrupt():
 
 
 
+def attempt_to_autojoin():
+    # Just to click some inconsequential key in case the monitor is in sleep mode or something
+    pyautogui.press('scroll lock')
 
+    # I did this so the overall time spent waiting would be more consistent on around start
+    time.sleep(game_start_to_autojoin_delay - seeding_settings_restore_time)
+    try:
+        forceSquadWindowToTop(findSquadWindowHandle())
+        users_game_width, users_game_height = findUsersGameWindowSize()
+    except IndexError:
+        print('The script likely tried to fetch your game resolution before the game had started properly')
+        print('A possible remedy for this might be an increase to your delay " in the config file.')
+        time.sleep(15)
+        try:
+            forceSquadWindowToTop(findSquadWindowHandle())
+            users_game_width, users_game_height = findUsersGameWindowSize()
+        except Exception as error:
+            print(error)
 
-
+    print(f"Detected game resolution is: {users_game_width}x{users_game_height}")
+    forceSquadWindowToTop(findSquadWindowHandle())
+    resolution_from_folder_name = 0
+    for folder in os.scandir(icons_path):
+        if os.path.isdir(folder):
+            users_game_width, users_game_height = findUsersGameWindowSize()
+            if folder.name.endswith('p'):
+                resolution_from_folder_name = int(folder.name.strip('p'))
+            if users_game_height == resolution_from_folder_name:
+                for i in range(attempts_to_join_server):
+                    try:
+                        forceSquadWindowToTop(findSquadWindowHandle())
+                        users_game_width, users_game_height = findUsersGameWindowSize()
+                    except Exception:
+                        print("Unable to find user's window size")
+                        continue
+                    print(f'Initiating attempt to autojoin server with phrase: {server_to_autojoin}')
+                    print(f'Attempt #: {i + 1}')
+                    if locateAndJoinServer(
+                        server_to_autojoin, *iconAndImageHandler(folder.name), resolution_from_folder_name):
+                        return
+                    time.sleep(60)
 
 
 
 
 if __name__ == '__main__':
+    version = 2.6
+    print(f'SeedingScript ----- By Flaxelaxen ----- Version: {version}')
     # Just initializing variables that will be used and checked later.
     threshold_not_hit = True
     userinput = None
     script_started_game = False
+    autojoin_if_already_ingame = False
     CONFIGFILE_NAME = "seedingconfig.ini"
     GAME_URL = "steam://rungameid/393380"
     server_to_autojoin = 'triggernometry'
     # ALTERNATIVE_CONFIGFILE = os.path.abspath("C:\Users\Steffen\AppData\Local\Seedingscript\seedingscript.ini")
     # configCheckerAndFixer(CONFIGFILE_PATH)
     pyautogui.FAILSAFE = False
-
+    # use_failsafe = True
 
     if sys.argv[0].endswith('exe') and 'python.exe' not in sys.argv[0]:
         SCRIPT_CURRENT_DIR = os.path.dirname(sys.executable)
@@ -827,24 +901,30 @@ if __name__ == '__main__':
         CONFIGFILE_PATH = os.path.join(f'{SCRIPT_CURRENT_DIR}\\{CONFIGFILE_NAME}')
     icons_path = os.path.join(f'{SCRIPT_CURRENT_DIR}\\icons')
 
-
-
     InitializeScriptConfigFile(CONFIGFILE_PATH)
-    user_set_seeding_threshold, \
-    address, \
-    sleep_interval, \
-    game_executable, \
-    squad_game_launcher_path, \
-    is_seeding_random_enabled, \
-    is_seeding_settings_active, \
-    seeding_random_lower, \
-    seeding_random_upper, \
-    game_start_to_autojoin_delay, \
-    join_server_automatically_enabled, \
-    close_script_if_game_not_running,\
-    attempts_to_join_server, \
-    server_to_autojoin, \
-    userinput = configReadAndLoad(CONFIGFILE_PATH)
+
+
+
+
+
+
+    while os.path.isfile(CONFIGFILE_PATH):
+        user_set_seeding_threshold, \
+        address, \
+        sleep_interval, \
+        game_executable, \
+        squad_game_launcher_path, \
+        is_seeding_random_enabled, \
+        is_seeding_settings_active, \
+        seeding_random_lower, \
+        seeding_random_upper, \
+        game_start_to_autojoin_delay, \
+        join_server_automatically_enabled, \
+        close_script_if_game_not_running, \
+        attempts_to_join_server, \
+        server_to_autojoin, \
+        autojoin_if_already_ingame, \
+        userinput = configReadAndLoad(CONFIGFILE_PATH)
 
 
     try:
@@ -864,58 +944,30 @@ if __name__ == '__main__':
 
     seeding_settings_restore_time = 0
     if not isProcessRunning(game_executable):
+        script_started_game = True
         if is_seeding_settings_active:
             applySeedingSettings(CONFIGFILE_PATH)
         startGame(squad_game_launcher_path, GAME_URL)
-        script_started_game = True
+        seeding_settings_restore_time = 15
+        time.sleep(seeding_settings_restore_time)
         if is_seeding_settings_active:
-            seeding_settings_restore_time = 15
-            time.sleep(seeding_settings_restore_time)
             restoreLastUsedSettings(CONFIGFILE_PATH)
 
 
 
-
-
     if join_server_automatically_enabled:
-        # Just to click some inconsequential key in case the monitor is in sleep mode or something
-        pyautogui.press('scroll lock')
+        if autojoin_if_already_ingame:
+            print('Autojoin while in-game enabled.')
+            print('Attempting to autojoin')
+            attempt_to_autojoin()
 
-        # I did this so the overall time spent waiting would be more consistent on around start
-        time.sleep(game_start_to_autojoin_delay - seeding_settings_restore_time)
-        try:
-            forceSquadWindowToTop(findSquadWindowHandle())
-            users_game_width, users_game_height = findUsersGameWindowSize()
-        except IndexError:
-            print('The script tried to fetch your game resolution before it had started properly')
-            print('You may want to increase your delay in the config file.')
-            time.sleep(15)
-            try:
-                forceSquadWindowToTop(findSquadWindowHandle())
-                users_game_width, users_game_height = findUsersGameWindowSize()
-            except Exception as error:
-                print(error)
-        print(f"Detected game resolution is: {users_game_width}x{users_game_height}")
-        forceSquadWindowToTop(findSquadWindowHandle())
-        joined_server = False
-        resolution_from_folder_name = 0
-        for folder in os.scandir(icons_path):
-            if joined_server:
-                break
-            if os.path.isdir(folder):
-                users_game_width, users_game_height = findUsersGameWindowSize()
-                if folder.name.endswith('p'):
-                    resolution_from_folder_name = int(folder.name.strip('p'))
-                if users_game_height == resolution_from_folder_name:
-                    for i in range(attempts_to_join_server):
-                        users_game_width, users_game_height = findUsersGameWindowSize()
-                        print(f'Initiating attempt to autojoin server with phrase: {server_to_autojoin}')
-                        print(f'Attempt #: {i+1}')
-                        if locateAndJoinServer(server_to_autojoin, *iconAndImageHandler(folder.name), resolution_from_folder_name):
-                            joined_server = True
-                            break
-                        time.sleep(60)
-                    # print('Script was unable to automatically join the server')
+        else:
+            print('Autojoin while already ingame not enabled')
+            print('Checking if the script started the game')
+            if script_started_game:
+                print('Script started the game, attempting autojoin')
+                attempt_to_autojoin()
+
 
 
     print(f"Your activation threshold is:  {user_set_seeding_threshold}")
