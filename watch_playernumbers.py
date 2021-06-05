@@ -7,7 +7,8 @@ import datetime
 import configparser
 from SeedingScript import findCurrentPlayercount
 
-
+# This is intended for Flax' personal use, experimental script to join the server on my secondary devices if the server dips below a certain threshold
+# And within a specified timeframe.
 
 
 
