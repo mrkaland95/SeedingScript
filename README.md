@@ -66,6 +66,10 @@ Example of use in the commandline would for example be:
 ````
 Seedingscript.exe -close -thresh-80
 ````
+or using the source code file:
+````
+python seedingscript.py -close -thresh-80
+````
 
 In this instance, you would set the desired action to close, and the action threshold to 80 players.
 The script would then close the game down once the player number reaches 80.
