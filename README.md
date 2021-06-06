@@ -16,35 +16,38 @@ is_seeding_random_enabled = true
 seeding_random_upper_limit = 98
 seeding_random_lower_limit = 60
 ````
-In this example, parameters that decide whether your chosen action should be executed at a random player number between the lower and upper limit. By defualt set to on.
+In this example, these are the parameters that decide whether your chosen action would be executed, at a random number of players between the lower and upper limit.
+
+This setting is by defualt set to on.
 ````
 join_server_automatically_enabled = false
 ````
 The parameter that determines whether the script will try to autojoin the desired server.
-Opt in by default, so this must be enabled after the config file has been initialized.
+This setting is *OPT-IN* by default, so this must be enabled after the config file has been initialized.
 ````
 autojoin_if_already_ingame = false
 ````
-Lets you chose whether the script should attempt to autojoin the server, if the game was already running when the script started.
+This lets you chose if the script should attempt to autojoin the server, if the game was already running when the script started.
 
 
 ***
 
 
-The script also has the capability of applying lightweight "seeding" settings upon the game
-being started(If the game is launched by the program only,
-it won't try to apply these settings if you are already running the game).
-This setting however, is disabled by default in the config file.
+The script also has the capability of applying lightweight "seeding" settings upon game start.
+This will however only work if the game was not already running.
+
+Since the setting still has some flaws, it will be set to *false* by default in the config file, and must be set to *true* should you wish to use it
+
 To enable it, change the "lightweight_seeding_settings" variable to "true" and save.
-Then, when the script is started up for the first time,
-it will create a folder named "backup" in your game config folder,
-and initialize some game config files, as well as take a backup of your game config file.
-Use this file to restore your config file doesen't get restored properly.
-The script will restore your last used config file,
-but can't do this if the script is forcefully closed,
-or if the player threshold is not triggered.
-Included in the GUI is a button that will restore your last used settings if the script were to be forcefully closed.
-This is highly recommended to be used in those instances of the script being close imporperly.
+
+At that point, when the script starts up for the first time,
+the script will create a folder named "backup" in your game config folder,
+and initialize some game config files, as well as create an "original" backup of your game config file.
+This is done so your settings are saved in the rare event your proper settings are not restored properly.
+
+Be aware that this can basically only happen if the script was forcefully closed from the taskmanager or the terminal it's running in was closed.
+
+While there are some safeguards built in, in the event of the script being forcefully closed, and your proper settings have not been restored yet, you can use the "restore last" button in the GUI or the "-restorelast" command from the commandline.
 ***
 In addition to normal GUI use, there is added capability to adjust or enable certain settings from the command line.
 These are as following:
