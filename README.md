@@ -48,16 +48,26 @@ This is highly recommended to be used in those instances of the script being clo
 ***
 In addition to normal GUI use, there is added capability to adjust or enable certain settings from the command line.
 These are as following:
+
+| Command | Description |
+|------------|-----------------|
+| `-help` or `-h` | Let's you see the available commands while in the terminal. Stops execution of the script. |
+| `-close` | Sets your input to close and skips the GUI startup. Mutually exclusive with -shutdown|
+| `-shutdown` | Sets your input to shutdown and skips the GUI startup. Mutually exclusive with -close |
+| `-restorelast` | Restores the last saved game config file before launching the script. Can for example be used if the script was closed before regular settings were restored|
+| `-thresh-`{desired integer here}| Allows you to set the seeding threshold from the command line. Overrides the 'seeding-random' parameter from the config file. Remove the curly braces when inputting the desired threshold|
+| `-autoseed` | Overrides the 'autoseeding_enabled' option from the config file and sets to it to 'True'
+
+Example of use in the commandline would for example be:
+
 ````
--help or -h
--close
--shutdown
--restorelast
--thresh-<<integer here>>
--autoseed
+Seedingscript.exe -close -thresh-80
 ````
-The 'help' argument explains the use of these.
-"close" and "shutdown" are exclusive paramters, only one or the other can be used, or the program will shut down.
+
+In this instance, you would set the desired action to close, and the action threshold to 80 players.
+The script would then close the game down once the player number reaches 80.
+
+
 
 ***
 Finally, if any issues pop up, you can PM Flax on discord, or report issues here.
