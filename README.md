@@ -2,7 +2,7 @@
 
 Script for shutting down the game/PC when the server population is high enough, and automatically launch the game when the chosen action is taken(close or shutdown)
 ***
-#####To download, go in to the "releases tab", choose the most recent release and then download the "seedingscript.zip" file under the assets dropdown.
+To download, go in to the "releases tab", choose the most recent release and then download the "seedingscript.zip" file under the assets dropdown.
 ***
 On startup, a config file will be initialized, where the script will pull most of it's parameters from.
 This config file will be created in the same folder as the script was launched from, and if the script is moved,
