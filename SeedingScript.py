@@ -348,7 +348,7 @@ def startGame(game_launcher, game_url):
 
 
 
-
+# TODO Not currently in use, planning to implement this to fix "older" config files
 
 def configCheckerAndFixer(configfile_name):
     """
@@ -358,7 +358,6 @@ def configCheckerAndFixer(configfile_name):
     """
     config = configparser.ConfigParser()
     config.read(configfile_name)
-
     if not config.has_option('SETTINGS', 'is_seeding_random_enabled'):
         config.set('SETTINGS', 'is_seeding_random_enabled', 'true')
     if not config.has_option('SETTINGS', 'lightweight_seeding_settings'):
@@ -760,12 +759,13 @@ def cmdlineArgumentHandler():
         for argument in args:
             # Did it this way so only one or the other could be supplied. Whichever argument supplied last will count
             if argument == ('-help' or '-h'):
-                print('Valid arguments are -close, -shutdown, -restorelast, -thresh<<integer>>')
+                print(      'Valid arguments are -close, -shutdown, -restorelast, -thresh<<integer>>, -autojoin')
                 print('')
-                print('Close and shutdown are either or options - you will only be allowed to use one at a time.')
-                print('-restorelast will restore your your last used settings, but only if the "seeding_settings_enabled" is set to true in the config file')
-                print('-thresh<<integer>> overrides the seeding threshold and seeding_random setting from the config file')
-                print('Some examples of use: "-thresh95", or "-thresh80". This would set the seeding threshold to 95 and 80, respectively')
+                print('     Close and shutdown are either or options - you will only be allowed to use one at a time.')
+                print('     -restorelast will restore your your last used settings, but only if the "seeding_settings_enabled" is set to true in the config file')
+                print('     -thresh<<integer>> overrides the seeding threshold and seeding_random setting from the config file')
+                print('     Some examples of use: "-thresh95", or "-thresh80". This would set the seeding threshold to 95 and 80, respectively')
+                print('')
             if argument == "-close":
                 userinput = "close"
                 print("The game will be closed upon hitting the threshold")
@@ -784,6 +784,9 @@ def cmdlineArgumentHandler():
                 except Exception as err:
                     print(err, "Error, likely invalid character or no number after 'thresh' command was put in")
                     sys.exit()
+            if argument == '-autoseed':
+                global join_server_automatically_enabled
+                join_server_automatically_enabled = True
     except Exception as err:
         print(err)
 
@@ -879,9 +882,9 @@ def attempt_to_autojoin():
 
 if __name__ == '__main__':
     version = 2.6
-    print(f'SeedingScript ----- By Flaxelaxen ----- Version: {version}')
+    print(f'SeedingScript - By Flaxelaxen ------ Version: {version}')
     # Just initializing variables that will be used and checked later.
-    threshold_not_hit = True
+    threshold_hit = False
     userinput = None
     script_started_game = False
     autojoin_if_already_ingame = False
@@ -902,29 +905,22 @@ if __name__ == '__main__':
     icons_path = os.path.join(f'{SCRIPT_CURRENT_DIR}\\icons')
 
     InitializeScriptConfigFile(CONFIGFILE_PATH)
-
-
-
-
-
-
-    while os.path.isfile(CONFIGFILE_PATH):
-        user_set_seeding_threshold, \
-        address, \
-        sleep_interval, \
-        game_executable, \
-        squad_game_launcher_path, \
-        is_seeding_random_enabled, \
-        is_seeding_settings_active, \
-        seeding_random_lower, \
-        seeding_random_upper, \
-        game_start_to_autojoin_delay, \
-        join_server_automatically_enabled, \
-        close_script_if_game_not_running, \
-        attempts_to_join_server, \
-        server_to_autojoin, \
-        autojoin_if_already_ingame, \
-        userinput = configReadAndLoad(CONFIGFILE_PATH)
+    user_set_seeding_threshold, \
+    address, \
+    sleep_interval, \
+    game_executable, \
+    squad_game_launcher_path, \
+    is_seeding_random_enabled, \
+    is_seeding_settings_active, \
+    seeding_random_lower, \
+    seeding_random_upper, \
+    game_start_to_autojoin_delay, \
+    join_server_automatically_enabled, \
+    close_script_if_game_not_running, \
+    attempts_to_join_server, \
+    server_to_autojoin, \
+    autojoin_if_already_ingame, \
+    userinput = configReadAndLoad(CONFIGFILE_PATH)
 
 
     try:
@@ -971,7 +967,7 @@ if __name__ == '__main__':
 
 
     print(f"Your activation threshold is:  {user_set_seeding_threshold}")
-    while threshold_not_hit:
+    while not threshold_hit:
         try:
             if close_script_if_game_not_running:
                 if not isProcessRunning(game_executable):
@@ -979,19 +975,19 @@ if __name__ == '__main__':
                         restoreLastUsedSettings(CONFIGFILE_PATH)
                     sys.exit("Game not running, shutting down script")
             now = datetime.datetime.now()
-            current_time = now.strftime("%H:%M")
+            current_hour_min = now.strftime("%H:%M")
             current_player_count = findCurrentPlayercount(address)
-            print(f" {current_time}  -- There are currently {current_player_count} players on the server")
+            print(f" {current_hour_min}  -- There are currently {current_player_count} players on the server")
             if current_player_count >= user_set_seeding_threshold:
                 if userinput == 'close':
                     gameclose(game_executable)
                     if script_started_game:
                         restoreLastUsedSettings(CONFIGFILE_PATH)
                         print('Settings have been restored. Closing down program')
-                        threshold_not_hit = False
+                        threshold_hit = True
                     else:
                         print('Game have been closed. Shutting down script')
-                        threshold_not_hit = False
+                        threshold_hit = True
                 elif userinput == 'shutdown':
                     if not script_started_game:
                         restoreLastUsedSettings(CONFIGFILE_PATH)
