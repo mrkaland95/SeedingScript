@@ -315,9 +315,6 @@ def applySeedingSettings(seeding_script_config):
             shutil.copyfile(swap_config_file, currently_active_config_file)
             print("Lightweight seeding settings applied")
             return
-
-
-
     except Exception as error:
         print(error)
 
@@ -495,6 +492,18 @@ def gameclose(executable):
         print("Something went wrong when trying to close the game")
 
 
+def hibernate():
+    try:
+        if is_seeding_settings_active:
+            restoreLastUsedSettings(CONFIGFILE_PATH)
+    except Exception as exception:
+        print(exception)
+    print('Sending the computer into hibernate mode.')
+    os.system('shutdown /f /h')
+
+
+
+
 def shutdown():
     """
     Shuts down the computer, and tries to restore the user's original game config settings, if enabled.
@@ -584,8 +593,15 @@ def findAndClickSearchBar(search_bar_pic, game_resolution):
         y_offset += 20
     elif game_resolution == 900:
         y_offset += 10
+
     try:
         forceSquadWindowToTop(findSquadWindowHandle())
+    except Exception as e:
+        print(e)
+        print('Unable to force the Squad window to maximize.')
+
+
+    try:
         mouse = pyautogui
         x1, y1, w1, h1 = pyautogui.locateOnScreen(search_bar_pic, confidence=0.75, grayscale=True)
         mouse.click(x1+x_offset, y1+y_offset)
@@ -704,33 +720,47 @@ def locateAndJoinServer(server_string_to_autojoin, server_name_picture,
     """
 
     # Did this, so the script would check
-    forceSquadWindowToTop(findSquadWindowHandle())
-    time.sleep(0.2)
+    try:
+        forceSquadWindowToTop(findSquadWindowHandle())
+        time.sleep(0.2)
+    except:
+        pass
+
     if checkIfAlreadyInBrowser(in_server_browser, in_server_browser_backup):
         for i in range(10):
             if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                 return True
             time.sleep(0.5)
+
         if findAndClickSearchBar(search_bar, game_resolution):
             pyautogui.move(100, 0)
             cleanSearchBar(25)
             writeServerToSearchBar(server_string_to_autojoin)
+
             for i in range(10):
                 if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                     return True
                 time.sleep(0.5)
-    forceSquadWindowToTop(findSquadWindowHandle())
-    time.sleep(0.2)
+    try:
+        forceSquadWindowToTop(findSquadWindowHandle())
+        time.sleep(0.2)
+    except:
+        pass
+
     if findAndClickServerBrowser(server_browser_button):
         time.sleep(20)
         for i in range(13): # Tries to find the server for about 4 seconds before looking for the search bar
             if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                 return True
             time.sleep(0.3)
+
+
         if findAndClickSearchBar(search_bar, game_resolution):
             cleanSearchBar(25)
             writeServerToSearchBar(server_string_to_autojoin)
             time.sleep(15)
+
+
         for i in range(20):
             if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                 return True
@@ -774,6 +804,7 @@ def cmdlineArgumentHandler():
                 print("Your computer will shut down upon hitting the threshold")
             if argument == "-restorelast":
                 restoreLastUsedSettings(CONFIGFILE_PATH)
+                sys.exit()
             if argument.startswith("-thresh-"):
                 try:
                     global user_set_seeding_threshold
@@ -855,13 +886,22 @@ def attempt_to_autojoin():
             print(error)
 
     print(f"Detected game resolution is: {users_game_width}x{users_game_height}")
-    forceSquadWindowToTop(findSquadWindowHandle())
+    try:
+        forceSquadWindowToTop(findSquadWindowHandle())
+    except:
+        pass
+
     resolution_from_folder_name = 0
     for folder in os.scandir(icons_path):
+
         if os.path.isdir(folder):
+
             users_game_width, users_game_height = findUsersGameWindowSize()
+
             if folder.name.endswith('p'):
+
                 resolution_from_folder_name = int(folder.name.strip('p'))
+
             if users_game_height == resolution_from_folder_name:
                 for i in range(attempts_to_join_server):
                     try:
@@ -896,6 +936,8 @@ if __name__ == '__main__':
     pyautogui.FAILSAFE = False
     # use_failsafe = True
 
+
+    # So the script regardless of it running as an .exe or .py file.
     if sys.argv[0].endswith('exe') and 'python.exe' not in sys.argv[0]:
         SCRIPT_CURRENT_DIR = os.path.dirname(sys.executable)
         CONFIGFILE_PATH = os.path.join(f'{SCRIPT_CURRENT_DIR}\\{CONFIGFILE_NAME}')
@@ -921,6 +963,9 @@ if __name__ == '__main__':
     server_to_autojoin, \
     autojoin_if_already_ingame, \
     userinput = configReadAndLoad(CONFIGFILE_PATH)
+
+    print(f'Read userinput from configfile: {userinput}')
+
 
 
     try:
@@ -952,6 +997,11 @@ if __name__ == '__main__':
 
 
     if join_server_automatically_enabled:
+        try:
+            pyautogui.click(x=960, y=540)
+            time.sleep(0.2)
+        except:
+            pass
         if autojoin_if_already_ingame:
             print('Autojoin while in-game enabled.')
             print('Attempting to autojoin')
@@ -992,7 +1042,7 @@ if __name__ == '__main__':
                     if not script_started_game:
                         restoreLastUsedSettings(CONFIGFILE_PATH)
                         print('Settings have been restored.')
-                    shutdown()
+                    hibernate()
         except Exception as error:
             print(error)
         time.sleep(int(sleep_interval))
