@@ -132,12 +132,12 @@ def InitializeScriptConfigFile(configfile_name):
         "\n"
         
         
-        'server_address': 'r2f.tacticaltriggernometry.com',
+        'server_address': '72.9.150.223',
         "; The server's address. Generally don't touch, but can be changed if we get a new host.\n"
         "\n"
         
         
-        'port': '27165',
+        'port': '27180',
         "; Same as before, generally don't touch.\n"
         "\n"
         
@@ -370,9 +370,9 @@ def configCheckerAndFixer(configfile_name):
     if not config.has_option('SETTINGS', 'seeding_threshold'):
         config.set('SETTINGS', 'seeding_threshold', '90')
     if not config.has_option('SETTINGS', "server_address"):
-        config.set('SETTINGS', "server_address", 'r2f.tacticaltriggernometry.com')
+        config.set('SETTINGS', "server_address", '72.9.150.223')
     if not config.has_option('SETTINGS', 'port'):
-        config.set('SETTINGS', 'port', '27165')
+        config.set('SETTINGS', 'port', '27180')
     with open(configfile_name, 'w') as f:
         config.write(f)
 
@@ -627,7 +627,11 @@ def checkIfAlreadyInBrowser(in_server_browser_pic, in_server_browser_pic2):
             return False
 
 
-
+def failsafe():
+    print('Seedingscript killed.')
+    if is_seeding_settings_active:
+        restoreLastUsedSettings(CONFIGFILE_PATH)
+    os._exit(0)
 
 
 def writeServerToSearchBar(server_name):
@@ -657,9 +661,14 @@ def forceSquadWindowToTop(window_handle):
     win32gui.BringWindowToTop(window_handle)
     shell = win32com.client.Dispatch('WScript.Shell')
     shell.SendKeys('%')
-    win32gui.SetForegroundWindow(window_handle)
-    win32gui.ShowWindow(window_handle, 9)
-    return window_handle
+    try:
+        win32gui.SetForegroundWindow(window_handle)
+        win32gui.ShowWindow(window_handle, 9)
+        return window_handle
+    except Exception as error:
+        print(error)
+        print('The script was likely unable to either find the game window handle, or force the window to top')
+        print('Due to a permission issue. For example if the "Start" menu was active.')
 
 
 
@@ -723,7 +732,7 @@ def locateAndJoinServer(server_string_to_autojoin, server_name_picture,
     try:
         forceSquadWindowToTop(findSquadWindowHandle())
         time.sleep(0.2)
-    except:
+    except Exception:
         pass
 
     if checkIfAlreadyInBrowser(in_server_browser, in_server_browser_backup):
@@ -744,7 +753,7 @@ def locateAndJoinServer(server_string_to_autojoin, server_name_picture,
     try:
         forceSquadWindowToTop(findSquadWindowHandle())
         time.sleep(0.2)
-    except:
+    except Exception:
         pass
 
     if findAndClickServerBrowser(server_browser_button):
@@ -765,7 +774,6 @@ def locateAndJoinServer(server_string_to_autojoin, server_name_picture,
             if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
                 return True
             time.sleep(0.5)
-
 
 
 
@@ -822,11 +830,8 @@ def cmdlineArgumentHandler():
         print(err)
 
 
-
 async def restoreSettingsonStart():
-
     # Not currently used, experimenting with async I/O later
-
     if is_seeding_settings_active:
         await asyncio.sleep(20)
         restoreLastUsedSettings(CONFIGFILE_PATH)
@@ -888,7 +893,7 @@ def attempt_to_autojoin():
     print(f"Detected game resolution is: {users_game_width}x{users_game_height}")
     try:
         forceSquadWindowToTop(findSquadWindowHandle())
-    except:
+    except Exception:
         pass
 
     resolution_from_folder_name = 0
@@ -918,10 +923,9 @@ def attempt_to_autojoin():
                     time.sleep(60)
 
 
-
-
 if __name__ == '__main__':
-    version = 2.6
+    pyautogui.FAILSAFE = False
+    version = 2.7
     print(f'SeedingScript - By Flaxelaxen ------ Version: {version}')
     # Just initializing variables that will be used and checked later.
     threshold_hit = False
@@ -933,8 +937,6 @@ if __name__ == '__main__':
     server_to_autojoin = 'triggernometry'
     # ALTERNATIVE_CONFIGFILE = os.path.abspath("C:\Users\Steffen\AppData\Local\Seedingscript\seedingscript.ini")
     # configCheckerAndFixer(CONFIGFILE_PATH)
-    pyautogui.FAILSAFE = False
-    # use_failsafe = True
 
 
     # So the script regardless of it running as an .exe or .py file.
@@ -964,8 +966,13 @@ if __name__ == '__main__':
     autojoin_if_already_ingame, \
     userinput = configReadAndLoad(CONFIGFILE_PATH)
 
-    print(f'Read userinput from configfile: {userinput}')
 
+    if userinput is not None:
+        print(f'Read userinput from configfile: {userinput}')
+
+
+    # Adds a keyboard failsafe to stop the program.
+    keyboard.add_hotkey('ctrl+shift+s', failsafe)
 
 
     try:
@@ -997,10 +1004,14 @@ if __name__ == '__main__':
 
 
     if join_server_automatically_enabled:
+        # Discovered some problems with the autojoin functionality after waking up from hibernation.
+        # This is a dumb workaround to make the start menu go away.
+
         try:
-            pyautogui.click(x=960, y=540)
-            time.sleep(0.2)
-        except:
+            keyboard.press_and_release('windows')
+            time.sleep(1)
+            pyautogui.click(x=1920 // 2, y=1080 // 2, button='middle')
+        except Exception:
             pass
         if autojoin_if_already_ingame:
             print('Autojoin while in-game enabled.')
@@ -1033,7 +1044,7 @@ if __name__ == '__main__':
                     gameclose(game_executable)
                     if script_started_game:
                         restoreLastUsedSettings(CONFIGFILE_PATH)
-                        print('Settings have been restored. Closing down program')
+                        print('Game closed. Settings have been restored. Shutting down script.')
                         threshold_hit = True
                     else:
                         print('Game have been closed. Shutting down script')

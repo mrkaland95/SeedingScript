@@ -74,6 +74,8 @@ python seedingscript.py -close -thresh-80
 In this instance, you would set the desired action to close, and the action threshold to 80 players.
 The script would then close the game down once the player number reaches 80.
 
+Most of these commands can be used mixed with each other, but -close and -shutdown are mutually exclusive commands, the program will close itself if both are attempted to be used.
+
 
 
 ***
