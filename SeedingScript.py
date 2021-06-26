@@ -80,7 +80,7 @@ class GUI:
         self.root = Tk()
         self.root.title("Seeding script")
         shutdownbutton = Button(
-            self.root, text="Shutdown the computer upon reaching the threshold", padx=30, pady=30,
+            self.root, text="Send the computer into hibernation upon reaching the threshold", padx=30, pady=30,
             command=shutdownButton)
         closebutton = Button(
             self.root, text="Close down the game upon reaching the threshold     ", padx=30, pady=30,
@@ -552,7 +552,7 @@ def findAndClickServerBrowser(server_browser_button):
         return False
 
 def findAndClickServerName(server_pic, modded_server, picture_height):
-    x_offset = 100
+    x_offset = 100 # Assumed base resolution of 720p
     y_offset = 110
 
     if picture_height == 900:
@@ -585,7 +585,13 @@ def findAndClickServerName(server_pic, modded_server, picture_height):
         return False
 
 def findAndClickSearchBar(search_bar_pic, game_resolution):
-    x_offset = 150
+    """
+    Finds the search bar
+    :param search_bar_pic:
+    :param game_resolution:
+    :return:
+    """
+    x_offset = 150 # assumed base resolution of 720p
     y_offset = 10
     if game_resolution == 1440:
         y_offset += 40
@@ -668,7 +674,7 @@ def forceSquadWindowToTop(window_handle):
     except Exception as error:
         print(error)
         print('The script was likely unable to either find the game window handle, or force the window to top')
-        print('Due to a permission issue. For example if the "Start" menu was active.')
+        print('This could possibly be a permission issue. For example if the "Start" menu was active as the top window.')
 
 
 
@@ -1053,7 +1059,9 @@ if __name__ == '__main__':
                     if not script_started_game:
                         restoreLastUsedSettings(CONFIGFILE_PATH)
                         print('Settings have been restored.')
+                    gameclose(game_executable)
                     hibernate()
+                    sys.exit(0)
         except Exception as error:
             print(error)
         time.sleep(int(sleep_interval))
