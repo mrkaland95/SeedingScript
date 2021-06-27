@@ -35,7 +35,8 @@ seedingscript_config = {
                 {
                     'game_executable': 'SquadGame.exe',
                     'squad_install': 'C:\Program Files (x86)\Steam\steamapps\common\Squad\Squad_launcher.exe',
-                    'game_config_path': f"{path}"
+                    'game_config_path': f"{path}",
+                    'game_url': "steam://rungameid/393380"
                 }
             }
         }
@@ -43,6 +44,9 @@ seedingscript_config = {
 
 
 seeding_config_json = json.dumps(seedingscript_config, indent = 4)
+
+
+
 
 print(seeding_config_json)
 
