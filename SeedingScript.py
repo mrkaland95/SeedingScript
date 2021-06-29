@@ -930,14 +930,15 @@ def attempt_to_autojoin():
 
 
 if __name__ == '__main__':
-    pyautogui.FAILSAFE = False
     version = 2.7
     print(f'SeedingScript - By Flaxelaxen ------ Version: {version}')
-    # Just initializing variables that will be used and checked later.
+    # Just initializing some parameters, that will be used and checked later.
+    pyautogui.FAILSAFE = False
     threshold_hit = False
     userinput = None
     script_started_game = False
-    autojoin_if_already_ingame = False
+    applied_seeding_settings = False
+    restored_original_settings = False
     CONFIGFILE_NAME = "seedingconfig.ini"
     GAME_URL = "steam://rungameid/393380"
     server_to_autojoin = 'triggernometry'
@@ -945,7 +946,7 @@ if __name__ == '__main__':
     # configCheckerAndFixer(CONFIGFILE_PATH)
 
 
-    # So the script regardless of it running as an .exe or .py file.
+    # So the script works regardless of it running as an .exe or .py file.
     if sys.argv[0].endswith('exe') and 'python.exe' not in sys.argv[0]:
         SCRIPT_CURRENT_DIR = os.path.dirname(sys.executable)
         CONFIGFILE_PATH = os.path.join(f'{SCRIPT_CURRENT_DIR}\\{CONFIGFILE_NAME}')
@@ -973,6 +974,7 @@ if __name__ == '__main__':
     userinput = configReadAndLoad(CONFIGFILE_PATH)
 
 
+    # If there was any userinput(desired) action found from the config file, or the command line.
     if userinput is not None:
         print(f'Read userinput from configfile: {userinput}')
 

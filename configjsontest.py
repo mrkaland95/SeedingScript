@@ -12,8 +12,16 @@ path = ''
 seedingscript_config = {
     'Settings':
         {
-            'seeding_threshold': 60,
-            'server_address': '72.9.150.223',
+            'seeding_threshold': {
+                'value': 60,
+                'description': 'The threshold that the desired user action will be taken. Overriden by the "Seeding Random" parameter, if enabled"'
+
+            },
+            'server_address':{
+                'value': '72.9.150.223'
+
+
+            },
             'query_port': 27180,
             'sleep_interval': 60,
             'random_seeding_thresh': True,
@@ -30,7 +38,7 @@ seedingscript_config = {
 
     'Other':
         {
-            'desired_action': None,
+            'desired_useraction': None,
             'paths':
                 {
                     'game_executable': 'SquadGame.exe',
