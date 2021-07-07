@@ -19,9 +19,11 @@ import win32gui
 
 
 
-
-
-# TODO: Make variable and function names consistent, remove redundant code
+################################################################
+# Script designed to automatically join a desired Squad server #
+#                                                              #
+#                                                              #
+################################################################
 
 
 
