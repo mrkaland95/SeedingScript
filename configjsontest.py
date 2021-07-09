@@ -49,7 +49,7 @@ def initConfig(config_folder: str, game_path: str, game_config_path):
                         'description': 'Whether lightweight seeding settings should be enabled.'
 
                     },
-                    'join_server_automatically_enabled': {
+                    'join_server_automatically': {
                         'value': True,
                         'description': 'Whether the script should attempt to automatically join the server'
                     },
@@ -130,7 +130,7 @@ def readConfig(config_folder: str):
     random_thresh_lower = config_file_json['settings']['random_seeding_thresh_lower']['value']
     random_thresh_upper = config_file_json['settings']['random_seeding_thresh_upper']['value']
     lightweight_seeding_settings = config_file_json['settings']['lightweight_seeding_settings']['value']
-    join_server_automatically = config_file_json['settings']['join_server_automatically_enabled']['value']
+    join_server_automatically = config_file_json['settings']['join_server_automatically']['value']
     game_start_to_autojoin_delay = config_file_json['settings']['game_start_to_autojoin_delay']['value']
     server_handle_to_autojoin = config_file_json['settings']['server_handle_to_autojoin']['value']
     close_script_if_game_closed = config_file_json['settings']['close_script_if_closed_running']['value']
@@ -162,23 +162,6 @@ def readConfig(config_folder: str):
 
 
 
-def saveConfig(seed_thresh,
-    server_address, query_port,
-    sleep_interval,
-    random_seeding_thresh,
-    random_thresh_lower,
-    random_thresh_upper,
-    lightweight_seeding_settings,
-    join_server_automatically,
-    game_start_to_autojoin_delay,
-    server_handle_to_autojoin,
-    close_script_if_game_closed,
-    attempt_autojoin_if_ingame,
-    attempts_to_autojoin,
-    game_executable,
-    squad_install,
-    game_config_path,
-    game_url_handle):
 
 
 
