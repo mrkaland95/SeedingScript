@@ -92,7 +92,7 @@ def initConfigJSON(config_folder: str, game_path: str, game_config_path: str):
                         'value': 98,
                         'description': 'The upper bound of the random seeding threshold'
                     },
-                    'lightweight_seeding_settings': {
+                    'lightweight_seeding_settings_on': {
                         'value': True,
                         'description': 'Whether lightweight seeding settings should be enabled.'
 
@@ -175,7 +175,7 @@ def readConfigJSON(config_folder: str):
     random_seeding_thresh = config_file_json['settings']['random_player_thresh']['value']
     random_thresh_lower = config_file_json['settings']['random_seeding_thresh_lower']['value']
     random_thresh_upper = config_file_json['settings']['random_seeding_thresh_upper']['value']
-    lightweight_seeding_settings = config_file_json['settings']['lightweight_seeding_settings']['value']
+    lightweight_seeding_settings = config_file_json['settings']['lightweight_seeding_settings_on']['value']
     join_server_automatically = config_file_json['settings']['join_server_automatically']['value']
     game_start_to_autojoin_delay = config_file_json['settings']['game_start_to_autojoin_delay']['value']
     server_handle_to_autojoin = config_file_json['settings']['server_handle_to_autojoin']['value']
@@ -235,7 +235,7 @@ def updateConfigJSON(config_folder: str):
     config_file_json['settings']['random_seeding_thresh']['value'] = random_seeding_threshold
     config_file_json['settings']['random_seeding_thresh_lower']['value'] = random_thresh_lower
     config_file_json['settings']['random_seeding_thresh_upper']['value'] = random_thresh_upper
-    config_file_json['settings']['lightweight_seeding_settings']['value'] = lightweight_seeding_settings
+    config_file_json['settings']['lightweight_seeding_settings_on']['value'] = lightweight_seeding_settings
     config_file_json['settings']['join_server_automatically']['value'] = join_server_automatically
     config_file_json['settings']['game_start_to_autojoin_delay']['value'] = game_start_to_autojoin_delay
     config_file_json['settings']['server_handle_to_autojoin']['value'] = server_handle_to_autojoin
@@ -300,7 +300,7 @@ def settings_window():
 
             [sgui.Checkbox('Close Script Automatically If Game Closes', default=close_script_if_game_closed,
             key='-CLOSE_IF_NOT_RUNNING-', enable_events=True, tooltip=
-            'Whether the script will close itself should the game be closed, after the script main logic loop has started'
+            'Whether the script will close itself should the game be closed, after the script main_loop logic loop has started'
             "Does not affect regular shutdown if that's the chosen action. ")],
 
             [sgui.Checkbox('Attempt To Autojoin If Already Ingame', default=attempt_autojoin_if_ingame,
@@ -318,7 +318,7 @@ def settings_window():
             element_justification='center'),
 
 
-        # Right bottom frame on the left main frame.
+        # Right bottom frame on the left main_loop frame.
         sgui.Frame("", layout=[
             [sgui.Text('Attempts To Autojoin')],
             [sgui.InputText(key='-ATTEMPTS_TO_AUTOJOIN-', size=(5, 5), default_text=attempts_to_autojoin, enable_events=True,
@@ -378,7 +378,7 @@ def settings_window():
         '-UPPER_THRESH-': 'random_seeding_thresh_lower',
         '-RANDOM_SEEDING_THRESH-': 'random_player_thresh',
         '-SLEEP_INTERVAL': 'sleep_interval',
-        '-LIGHTWEIGHT_SETTINGS-': 'lightweight_seeding_settings',
+        '-LIGHTWEIGHT_SETTINGS-': 'lightweight_seeding_settings_on',
         '-JOIN_SERVER_AUTOMATICALLY-': 'join_server_automatically',
         '-GAME_INSTALL-': 'squad_install',
         '-GAME_START_DELAY-': 'game_start_to_autojoin_delay',

@@ -14,6 +14,7 @@ import a2s
 import keyboard
 import psutil
 import pyautogui
+import pythoncom
 import win32com.client
 import win32gui
 from collections import OrderedDict
@@ -21,19 +22,11 @@ from collections import OrderedDict
 
 
 
-
-
-
-
-
-
-
-
-################################################################
-# Script designed to automatically join a desired Squad server #
-#                                                              #
-#                                                              #
-################################################################
+#########################################################################################
+#        Script designed to automatically join a desired Squad server                   #
+#                                                                                       #
+#                                                                                       #
+#########################################################################################
 
 
 class MultiOrderedDict(OrderedDict):
@@ -43,6 +36,18 @@ class MultiOrderedDict(OrderedDict):
         else:
             super().__setitem__(key, value)
 
+def save_prompt():
+    sgui.theme('DarkGrey14')
+
+    layout = [
+    [sgui.Text('There are unsaved changes. Do you want to save them before exiting?')]
+
+    ]
+
+
+
+
+
 
 def settings_window():
     """
@@ -50,11 +55,42 @@ def settings_window():
     updating the script's config file is handled.
     :return:
     """
+
+    # Base folder for where the game generally is installed.
+    programfiles_32 = os.environ["ProgramFiles(x86)"]
+
+
+
+    # Reloads the parameters from the config file.
+    player_threshold, \
+    server_ip, \
+    query_port, \
+    sleep_interval, \
+    random_thresh_enabled, \
+    random_thresh_lower, \
+    random_thresh_upper, \
+    lightweight_seeding_settings_on, \
+    join_server_automatically, \
+    game_start_to_autojoin_delay, \
+    server_handle_to_autojoin, \
+    close_script_if_game_closed, \
+    attempt_autojoin_if_ingame, \
+    attempts_to_autojoin, \
+    game_executable, \
+    squad_game_launcher_path, \
+    game_config_path, \
+    game_url_handle, \
+    desired_useraction\
+    = readConfigJSON(config_settings_folder)
+
+
+
+
     # Loading the script's config file to memory, so values can be updated when save button is clicked.
     script_config_path = f'{config_settings_folder}\\seedingconfig.json'
     with open(script_config_path, 'r') as f:
         config_file_json = json.load(f)
-    config_file_json_base = config_file_json
+    config_file_json_base = dict(config_file_json)
 
 
     sgui.theme('DarkGrey14')
@@ -88,14 +124,14 @@ def settings_window():
             'Chooses a random integer between the chosen lower and upper bounds.'
             'By default on. Note that this overrides the manually set player threshold')],
 
-            [sgui.Checkbox('Lightweight Seeding Settings', default=lightweight_seeding_settings,
-            key='-LIGHTWEIGHT_SETTINGS-', enable_events=True, tooltip=
+            [sgui.Checkbox('Lightweight Seeding Settings', default=lightweight_seeding_settings_on,
+                           key='-LIGHTWEIGHT_SETTINGS-', enable_events=True, tooltip=
             'This specifies whether the script will apply reduced graphical settings to the game before starting it.'
             'Some examples of the settings affected are; resolution, framerate limiter, resolution scaling.')],
 
             [sgui.Checkbox('Close Script Automatically If Game Closes', default=close_script_if_game_closed,
             key='-CLOSE_IF_NOT_RUNNING-', enable_events=True, tooltip=
-            'Whether the script will close itself should the game be closed, after the script main logic loop has started'
+            'Whether the script will close itself should the game be closed, after the script main_loop logic loop has started'
             "Does not affect regular shutdown if that's the chosen action. ")],
 
             [sgui.Checkbox('Attempt To Autojoin If Already Ingame', default=attempt_autojoin_if_ingame,
@@ -113,7 +149,7 @@ def settings_window():
             element_justification='center'),
 
 
-        # Right bottom frame on the left main frame.
+        # Right bottom frame on the left main_loop frame.
         sgui.Frame("", layout=[
             [sgui.Text('Attempts To Autojoin')],
             [sgui.InputText(key='-ATTEMPTS_TO_AUTOJOIN-', size=(5, 5), default_text=attempts_to_autojoin, enable_events=True,
@@ -173,7 +209,7 @@ def settings_window():
         '-UPPER_THRESH-': 'random_seeding_thresh_lower',
         '-RANDOM_SEEDING_THRESH-': 'random_player_thresh',
         '-SLEEP_INTERVAL': 'sleep_interval',
-        '-LIGHTWEIGHT_SETTINGS-': 'lightweight_seeding_settings',
+        '-LIGHTWEIGHT_SETTINGS-': 'lightweight_seeding_settings_on',
         '-JOIN_SERVER_AUTOMATICALLY-': 'join_server_automatically',
         '-GAME_INSTALL-': 'squad_install',
         '-GAME_START_DELAY-': 'game_start_to_autojoin_delay',
@@ -184,187 +220,273 @@ def settings_window():
         '-SERVER_HANDLE-': 'server_handle_to_autojoin'
         }
 
-
     # Event loop
     while True:
         event, values = window.Read(timeout=75)
-        if event == 'SAVE':
-            print('save')
-            with open(script_config_path, 'w') as f:
-                json.dump(config_file_json, f, indent=4)
 
         if event == 'Exit' or event == sgui.WIN_CLOSED:
-            sgui.Popup()
+
+
+
             break
 
         for valid_event in valid_events:
             if event == valid_event:
-                print(event)
-                if 'THRESH' in event:
+                if event == '-PLAYER_THRESHOLD-':
+                    if values['-PLAYER_THRESHOLD-'] == "":
+                        window.Element('-PLAYER_THRESHOLD-').Update(0)
+                    else:
+                        try:
+                            int(values['-PLAYER_THRESHOLD-'])
+                        except Exception:
+                            window.Element('-PLAYER_THRESHOLD-').Update(config_file_json['settings']["player_threshold"]['value'])
+                            break
+
+                if event == ("-LOWER_THRESH-" or '-UPPER_THRESH-'):
                     values[valid_event] = int(values[valid_event])
+                    if values["-LOWER_THRESH-"] >= values['-UPPER_THRESH-']:
+                        break
+
+
+
+
+
+
+
+
+
                 config_file_json['settings'][f'{valid_events[valid_event]}']['value'] = values[valid_event]
+                print(event)
+
+
+        if event == 'SAVE':
+            print('save')
+            with open(script_config_path, 'w') as f:
+                json.dump(config_file_json, f, indent=4)
     window.close()
+
+def moveIconsFolder(config_folder):
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    icon_folder_local = os.path.join(f'{dir_path}/icons')
+    try:
+        shutil.copytree(src=icon_folder_local, dst=config_folder)
+    except Exception as err:
+        print(err)
+        return
+
+
 
 
 def main_window():
     sgui.theme('DarkGrey14')
-    menu_def = [['Settings', ['Open']]]
+    menu_def = [['Settings', ['&Open']]]
+
+    right_col = [sgui.Column([
+
+    ])]
+
+    left_col = [sgui.Column([
+    [sgui.Text('SeedingScript Output', font=('Helvetica', 16))],
+    [sgui.MLine(size=(30, 40), key='-ML-', text_color='WHITE',
+    autoscroll=True, reroute_stdout=True, echo_stdout_stderr=True,
+    reroute_stderr=True, write_only=True)]
+    ])]
+
+
+
     layout = \
     [[sgui.Menu(menu_def, tearoff=False)],
-     [sgui.Text('SeedingScript Output', font=('Helvetica', 16))],
-     [sgui.MLine(size=(40, 40), key='-ML-', text_color='WHITE',
-     autoscroll=True, reroute_stdout=True,
-     reroute_stderr=True, write_only=True)]]
-
-
+     [sgui.Button('Start SeedingScript', key='-LAUNCH-SCRIPT-', font=('helvetica', 16), auto_size_button=True)],
+     left_col
+     ]
     window = sgui.Window('SeedingScript', layout, font=('Helvetica', 16), resizable=True, size=(1000, 1000), finalize=True)
-    simulated_gameloop = threading.Thread(target=simulate_gameloop, daemon=True).start()
+
+
+
     while True:
-        event, values = window.read(timeout=100)
+        event, values = window.read(timeout=200)
         if event in ('Exit', sgui.WIN_CLOSED):
             global program_shutdown
             program_shutdown = True
             break
         if event == 'Open':
             settings_window()
+        if event == '-LAUNCH-SCRIPT-':
+            user_action_window()
     window.close()
 
 
 
 def user_action_window():
-    sgui.THEME_WINNATIVE()
+    sgui.theme('DarkGrey14')
 
     layout = [
-        [sgui.Text('Choose the action the script will take upon hitting the player threshold.')]
+        [sgui.Text('Choose the action the script will take upon hitting the player threshold.')],
+        [sgui.Button('Close Game', key='-CLOSE_GAME-', tooltip=
+        'This closes down the game upon reacing the player threshold.'),
 
+        sgui.Button('Hibernate', key='-HIBERNATE-', tooltip=
+        'This puts your computer in to hibernation when hitting the player threshold. '
+        'Not quite as fast as sleep mode, but saves power'),
+
+        sgui.Button('Shutdown computer', key='-SHUTDOWN-', tooltip=
+        'This does a hard shutdown of your computer when hitting the player threshold,'
+        'equivalent to pressing your powerbutton')]
     ]
 
-    window = sgui.Window('Choose your action', layout, size=(200, 150))
+    window = sgui.Window('Choose your action', layout, element_justification='c')
+
+    user_actions = {
+        '-CLOSE_GAME-': 'close',
+        '-HIBERNATE-': 'hibernate',
+        '-SHUTDOWN-': 'shutdown'
+    }
 
     while True:
         event, values = window.Read(timeout=100)
+        if event in ('Exit', sgui.WIN_CLOSED):
+            break
+        if event in user_actions:
+            desired_useraction = user_actions[event]
+            threading.Thread(target=main_loop, daemon=True, kwargs={'user_action': desired_useraction}).start()
+            time.sleep(0.2)
+            break
+
+        """
+        if event == '-CLOSE_GAME-':
+            desired_useraction = 'close'
+            threading.Thread(target=main_loop, daemon=True, args=desired_useraction).start()
+            time.sleep(wait_time)
+            break
+        elif event == '-HIBERNATE-':
+            desired_useraction = 'hibernate'
+            threading.Thread(target=main_loop, daemon=True, args=desired_useraction).start()
+            time.sleep(wait_time)
+            break
+        elif event == '-SHUTDOWN-':
+            desired_useraction = 'shutdown'
+            threading.Thread(target=main_loop, daemon=True, args=desired_useraction).start()
+            time.sleep(wait_time)
+            break
+        """
+
+    window.close()
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def initConfigJSON(config_folder: str, game_path: str, game_config_path: str):
-    """
-    Initializes the script's config file, in a JSON format.
-    :param config_folder:
-    :param game_path:
-    :param game_config_path:
-    :return:
-    """
-
-    seedingscript_config = \
-            {
-            'version': 3.0,
-
-            'settings':
-                {
-                    'player_threshold':
-                    {
-                        'value': 60,
-                        'description': 'The threshold that the desired user action will be taken. Overriden by the "Seeding Random" parameter, if enabled'
-                    },
-                    'server_address':
-                    {
-                        'value': '104.128.58.250',
-                        'description': 'The IP/Domain of the server, that the script will query for player numbers.'
-                    },
-                    'query_port':
-                    {
-                        'value': 27165,
-                        'description': ''
-                    },
-                    'sleep_interval':
-                    {
-                        'value': 60,
-                        'description': ''
-                    },
-                    'random_player_thresh':
-                    {
-                        'value': True,
-                        'description': 'Whether script will utilise a random seeding threshold between the specified upper and lower bounds. On by default'
-                    },
-                    'random_seeding_thresh_lower': {
-                        'value': 60,
-                        'description': 'The lower bound of the random seeding threshold'
-                    },
-                    'random_seeding_thresh_upper': {
-                        'value': 98,
-                        'description': 'The upper bound of the random seeding threshold'
-                    },
-                    'lightweight_seeding_settings': {
-                        'value': True,
-                        'description': 'Whether lightweight seeding settings should be enabled.'
-
-                    },
-                    'join_server_automatically': {
-                        'value': True,
-                        'description': 'Whether the script should attempt to automatically join the server'
-                    },
-                    'game_start_to_autojoin_delay': {
-                        'value': 60,
-                        'description': ''
-
-                    },
-                    'server_handle_to_autojoin': {
-                        'value': 'triggernometry',
-                        'description': 'The server handle the script will use to attempt to autojoin'
-                    },
-                    'close_script_if_closed_game': {
-                        'value': True,
-                        'description': 'If the script should automatically close if the game stops running for whatever reason'
-                    },
-                    'attempt_autojoin_if_ingame': {
-                        'value': True,
-                        'description': 'If the script will try to autojoin the server, even if you were already ingame when it started'
-                    },
-                    'attempts_to_auto_join_server': {
-                        'value': 3,
-                        'description': 'How many attempts the script will make to autojoin the server before giving up'
-                    },
-                    'game_executable': {
-                        'value': 'SquadGame.exe',
-                        'description': 'The name of the games executable'
-                    },
-                    'squad_install': {
-                        'value': f'{game_path}',
-                        'description': 'The path to the games launcher. No longer really necessary, but used as a backup'
-                    },
-                    'game_config_path': {
-                        'value': f'{game_config_path}',
-                        'description': ''
-                    },
-                    'game_url': {
-                        'value': "steam://rungameid/393380",
-                        'description': 'The steam URL to start up the game'
-                    },
-                    'desired_useraction': {
-                        'value': None,
-                        'description': 'if the user desires to not have to choose an input from the GUI, they can instead save one in the settings.'
-                    }
-                }
-            }
+def initConfigFolder(config_folder):
     if not os.path.isdir(config_folder):
         os.makedirs(name=config_folder)
 
+
+
+
+def initConfigJSON(config_folder: str):
+    """
+    Initializes the script's config file, in a JSON format.
+    :param config_folder:
+    :return:
+    """
+
+
+    programfiles_32 = os.environ["ProgramFiles(x86)"]
+    programfiles_64 = os.environ['ProgramW6432']
+    game_config_path = os.path.abspath(f"{local_appdata}/SquadGame/Saved/Config/WindowsNoEditor")
+    game_launcher_path_32 = f'{programfiles_32}/Steam/steamapps/common/Squad/squad_launcher.exe'
+    game_launcher_path_64 = f'{programfiles_64}/Steam/steamapps/common/Squad/squad_launcher.exe'
+    game_launcher_path = game_launcher_path_32 if os.path.exists(game_launcher_path_32) else game_launcher_path_64
+
+
+    seedingscript_config = \
+            {
+            'version': {
+                'value': 3.0
+            },
+
+            'player_threshold':
+            {
+                'value': 60,
+                'description': 'The threshold that the desired user action will be taken. Overriden by the "Seeding Random" parameter, if enabled'
+            },
+            'server_address':
+            {
+                'value': '104.128.58.250',
+                'description': 'The IP/Domain of the server, that the script will query for player numbers.'
+            },
+            'query_port':
+            {
+                'value': 27165,
+                'description': ''
+            },
+            'sleep_interval':
+            {
+                'value': 60,
+                'description': ''
+            },
+            'random_player_thresh':
+            {
+                'value': True,
+                'description': 'Whether script will utilise a random seeding threshold between the specified upper and lower bounds. On by default'
+            },
+            'random_seeding_thresh_lower': {
+                'value': 60,
+                'description': 'The lower bound of the random seeding threshold'
+            },
+            'random_seeding_thresh_upper': {
+                'value': 98,
+                'description': 'The upper bound of the random seeding threshold'
+            },
+            'lightweight_seeding_settings_on': {
+                'value': True,
+                'description': 'Whether lightweight seeding settings should be enabled.'
+
+            },
+            'join_server_automatically': {
+                'value': True,
+                'description': 'Whether the script should attempt to automatically join the server'
+            },
+            'game_start_to_autojoin_delay': {
+                'value': 60,
+                'description': ''
+
+            },
+            'server_handle_to_autojoin': {
+                'value': 'triggernometry',
+                'description': 'The server handle the script will use to attempt to autojoin'
+            },
+            'close_script_if_closed_game': {
+                'value': True,
+                'description': 'If the script should automatically close if the game stops running for whatever reason'
+            },
+            'attempt_autojoin_if_ingame': {
+                'value': True,
+                'description': 'If the script will try to autojoin the server, even if you were already ingame when it started'
+            },
+            'attempts_to_auto_join_server': {
+                'value': 3,
+                'description': 'How many attempts the script will make to autojoin the server before giving up'
+            },
+            'game_executable': {
+                'value': 'SquadGame.exe',
+                'description': 'The name of the games executable'
+            },
+            'squad_install': {
+                'value': f'{game_launcher_path}',
+                'description': 'The path to the games launcher. No longer really necessary, but used as a backup'
+            },
+            'game_config_path': {
+                'value': f'{game_config_path}',
+                'description': ''
+            },
+            'game_url': {
+                'value': "steam://rungameid/393380",
+                'description': 'The steam URL to start up the game'
+            },
+            'desired_useraction': {
+                'value': None,
+                'description': 'if the user desires to not have to choose an input from the GUI, they can instead save one in the settings.'
+            }
+        }
 
     script_config_path = f'{config_folder}\\seedingconfig.json'
     if not os.path.exists(script_config_path):
@@ -374,60 +496,55 @@ def initConfigJSON(config_folder: str, game_path: str, game_config_path: str):
 
 
 
-def initializeGameSeedingConfig(configfile_name):
+def initializeGameSeedingConfig(config_path: str, lightweight_settings: bool):
     """
     Initializes the gameconfig files for setting applying seeding settings, if applicable.
     :param configfile_name:
     :return:
     """
-    config = configparser.ConfigParser()
-    config.read(configfile_name)
 
-    game_original_config_path = os.path.abspath(config['OTHER']['game_config_path'])
-    backup_path = os.path.abspath(f'{game_original_config_path}\Backup')
-    original_config_file = os.path.abspath(f'{game_original_config_path}\GameUserSettings.ini')
-    on_startup_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
-    seeding_settings_swap_file = os.path.abspath(f'{backup_path}\GameUserSettingsSwapFile.ini')
-    backup_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsBackupOfOriginal.ini')
+    if lightweight_settings:
+        game_original_config_path = os.path.abspath(config_path)
+        backup_path = os.path.abspath(f'{game_original_config_path}\Backup')
+        original_config_file = os.path.abspath(f'{game_original_config_path}\GameUserSettings.ini')
+        on_startup_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
+        seeding_settings_swap_file = os.path.abspath(f'{backup_path}\GameUserSettingsSwapFile.ini')
+        backup_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsBackupOfOriginal.ini')
 
-    if not os.path.exists(backup_path):
-        try:
-            os.mkdir(backup_path)
-            print("Backup directory successfully initialized")
-        except FileExistsError:
-            pass
-        shutil.copyfile(original_config_file, on_startup_file)
-        shutil.copyfile(original_config_file, seeding_settings_swap_file)
-        shutil.copyfile(original_config_file, backup_config_file)
-        seedingparser = configparser.ConfigParser(dict_type=MultiOrderedDict, strict=False)
-        seedingparser.optionxform = str
-        seedingparser.read(seeding_settings_swap_file)
-        mainsection = seedingparser['/Script/Squad.SQGameUserSettings']
-        # All 4 sections below are required to change resolution before the game starts.
-        mainsection['ResolutionSizeX'] = "1280"
-        mainsection['ResolutionSizeY'] = "720"
-        mainsection['LastUserConfirmedResolutionSizeX'] = "1280"
-        mainsection['LastUserConfirmedResolutionSizeY'] = "720"
-        mainsection['LastUserConfirmedDesiredScreenWidth'] = '1280'
-        mainsection['LastUserConfirmedDesiredScreenHeight'] = '720'
-        mainsection['FullscreenMode'] = "2"
-        mainsection['LastConfirmedFullscreenMode'] = "2"
-        mainsection['MenuFrameRateLimit'] = '50.000000'
-        mainsection['FrameRateLimit'] = "20.000000"
-        mainsection['MasterVolume'] = "0.00000"
-        mainsection['ScreenPercentage'] = "75"
-        with open(seeding_settings_swap_file, "w") as writefile:
-            seedingparser.write(writefile)
-
+        if not os.path.exists(backup_path):
+            try:
+                os.mkdir(backup_path)
+                print("Backup directory successfully initialized")
+            except FileExistsError:
+                pass
+            shutil.copyfile(original_config_file, on_startup_file)
+            shutil.copyfile(original_config_file, seeding_settings_swap_file)
+            shutil.copyfile(original_config_file, backup_config_file)
+            seedingparser = configparser.ConfigParser(dict_type=MultiOrderedDict, strict=False)
+            seedingparser.optionxform = str
+            seedingparser.read(seeding_settings_swap_file)
+            mainsection = seedingparser['/Script/Squad.SQGameUserSettings']
+            # All 4 sections below are required to change resolution before the game starts.
+            mainsection['ResolutionSizeX'] = "1280"
+            mainsection['ResolutionSizeY'] = "720"
+            mainsection['LastUserConfirmedResolutionSizeX'] = "1280"
+            mainsection['LastUserConfirmedResolutionSizeY'] = "720"
+            mainsection['LastUserConfirmedDesiredScreenWidth'] = '1280'
+            mainsection['LastUserConfirmedDesiredScreenHeight'] = '720'
+            mainsection['FullscreenMode'] = "2"
+            mainsection['LastConfirmedFullscreenMode'] = "2"
+            mainsection['MenuFrameRateLimit'] = '50.000000'
+            mainsection['FrameRateLimit'] = "20.000000"
+            mainsection['MasterVolume'] = "0.00000"
+            mainsection['ScreenPercentage'] = "75"
+            with open(seeding_settings_swap_file, "w") as writefile:
+                seedingparser.write(writefile)
 
 
 
+def applySeedingSettings(game_config_path):
 
-
-def applySeedingSettings(seeding_script_config):
-    config = configparser.ConfigParser()
-    config.read(seeding_script_config)
-    original_path = os.path.abspath(config['OTHER']['game_config_path'])
+    original_path = os.path.abspath(game_config_path)
     backup_folder_path = os.path.abspath(f'{original_path}/Backup')
     currently_active_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
     on_startup_file = os.path.abspath(f'{backup_folder_path}\GameUserSettingsLastUsed.ini')
@@ -452,7 +569,7 @@ def applySeedingSettings(seeding_script_config):
 
 
 
-def startGame(game_launcher, game_url):
+def launchGame(game_launcher, game_url):
     """
     Starts Squad by telling steam to start it. Better solution than straight up starting the squad launcher
     :return:
@@ -474,6 +591,13 @@ def startGame(game_launcher, game_url):
 
 
 
+
+
+
+
+
+
+
 def readConfigJSON(config_folder: str):
     config_path = f'{config_folder}\\seedingconfig.json'
     with open(config_path, 'r') as f:
@@ -484,20 +608,20 @@ def readConfigJSON(config_folder: str):
             sys.exit()
 
 
-    player_threshold = config_file_json['settings']['player_threshold']['value']
+    player_threshold = int(config_file_json['settings']['player_threshold']['value'])
     server_ip = config_file_json['settings']['server_address']['value']
-    query_port = config_file_json['settings']['query_port']['value']
-    sleep_interval = config_file_json['settings']['sleep_interval']['value']
+    query_port = int(config_file_json['settings']['query_port']['value'])
+    sleep_interval = int(config_file_json['settings']['sleep_interval']['value'])
     random_seeding_thresh = config_file_json['settings']['random_player_thresh']['value']
-    random_thresh_lower = config_file_json['settings']['random_seeding_thresh_lower']['value']
-    random_thresh_upper = config_file_json['settings']['random_seeding_thresh_upper']['value']
-    lightweight_seeding_settings = config_file_json['settings']['lightweight_seeding_settings']['value']
+    random_thresh_lower = int(config_file_json['settings']['random_seeding_thresh_lower']['value'])
+    random_thresh_upper = int(config_file_json['settings']['random_seeding_thresh_upper']['value'])
+    lightweight_seeding_settings = config_file_json['settings']['lightweight_seeding_settings_on']['value']
     join_server_automatically = config_file_json['settings']['join_server_automatically']['value']
-    game_start_to_autojoin_delay = config_file_json['settings']['game_start_to_autojoin_delay']['value']
+    game_start_to_autojoin_delay = int(config_file_json['settings']['game_start_to_autojoin_delay']['value'])
     server_handle_to_autojoin = config_file_json['settings']['server_handle_to_autojoin']['value']
     close_script_if_game_closed = config_file_json['settings']['close_script_if_closed_game']['value']
     attempt_autojoin_if_ingame = config_file_json['settings']['attempt_autojoin_if_ingame']['value']
-    attempts_to_autojoin = config_file_json['settings']['attempts_to_auto_join_server']['value']
+    attempts_to_autojoin = int(config_file_json['settings']['attempts_to_auto_join_server']['value'])
     game_executable = config_file_json['settings']['game_executable']['value']
     squad_install = config_file_json['settings']['squad_install']['value']
     game_config_path = config_file_json['settings']['game_config_path']['value']
@@ -536,7 +660,7 @@ def restoreLastUsedSettings(seeding_script_config):
     """
     config = configparser.ConfigParser()
     config.read(seeding_script_config)
-    original_path = os.path.abspath(config['OTHER']['game_config_path'])
+    original_path = game_config_path
     backup_path = os.path.abspath(f'{original_path}\Backup')
     current_active_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
     last_used_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
@@ -553,12 +677,9 @@ def restoreLastUsedSettings(seeding_script_config):
         print("Or, the path to the game's config folder is incorrectly set")
 
 
-def restoreOriginalSettings(seeding_script_config):
-    config = configparser.ConfigParser()
-    config.read(seeding_script_config)
-    original_path = os.path.abspath(config['OTHER']['game_config_path'])
-    backup_configs_path = os.path.abspath(f'{original_path}\Backup')
-    current_active_config_file = os.path.abspath(f'{original_path}\GameUserSettings.ini')
+def restoreOriginalSettings(game_config_path):
+    backup_configs_path = os.path.abspath(f'{game_config_path}\Backup')
+    current_active_config_file = os.path.abspath(f'{game_config_path}\GameUserSettings.ini')
     backup_config_file = os.path.abspath(f'{backup_configs_path}\GameUserSettingsBackupOfOriginal.ini')
     compare_file = filecmp.cmp(backup_config_file, current_active_config_file)
     try:
@@ -586,7 +707,7 @@ def isProcessRunning(executable):
 
 
 
-def gameclose(executable):
+def closeGame(executable):
     """
     Function that shuts down the game when the findCurrentPlayercount reaches the critical threshold.
     :param executable: The game's executable name.
@@ -600,24 +721,19 @@ def gameclose(executable):
 
 
 def hibernate():
-    try:
-        if lightweight_seeding_settings:
-            restoreLastUsedSettings(game_config_path)
-    except Exception as exception:
-        print(exception)
+    """
+    Sends the computer in to hibernation.
+    :return:
+    """
+
     print('Sending the computer into hibernate mode.')
     os.system('shutdown /f /h')
 
 
 def shutdown():
     """
-    Shuts down the computer, and tries to restore the user's original game config settings, if enabled.
+    Does a hard shutdown of the computer.
     """
-    try:
-        if lightweight_seeding_settings:
-            restoreLastUsedSettings(game_config_path)
-    except Exception as exception:
-        print(exception)
     print("Shutting down the computer")
     os.system("shutdown /s /t 1")
 
@@ -629,12 +745,17 @@ def findCurrentPlayercount(server):
     :param: the server a2s server server_ip that will be queried:
     :return:
     """
-    serverplayers = a2s.players(server)
-    players = []
-    for player in serverplayers:
-        if player.name != "":
-            players.append(player)
-    return len(players)
+    try:
+        serverplayers = a2s.players(server)
+        players = []
+        for player in serverplayers:
+            if player.name != "":
+                players.append(player)
+        return len(players)
+    except Exception as err:
+        print('The connection to the server timed out')
+        if verbose:
+            print(err)
 
 
 def findAndClickServerBrowser(server_browser_button):
@@ -650,7 +771,7 @@ def findAndClickServerBrowser(server_browser_button):
         mouse = pyautogui
         x1, y1 = pyautogui.locateCenterOnScreen(server_browser_button, confidence=0.5, grayscale=True)
         mouse.click(x1, y1+3)
-        print('Found server browser from main menu')
+        print('Found server browser from main_loop menu')
         return True
     except TypeError:
         return False
@@ -695,7 +816,7 @@ def findAndClickSearchBar(search_bar_pic, game_resolution):
     :param game_resolution:
     :return:
     """
-    x_offset = 150 # assumed base resolution of 720p
+    x_offset = 150 # Offset for assumed base resolution of 720p
     y_offset = 10
     if game_resolution == 1440:
         y_offset += 40
@@ -737,9 +858,9 @@ def checkIfAlreadyInBrowser(in_server_browser_pic, in_server_browser_pic2):
             return False
 
 
-def writeServerToSearchBar(server_name):
-    print(f'Attempting to write the desired phrase {server_name} to the search bar')
-    for letter in server_name:
+def writeServerToSearchBar(server_handle: str):
+    print(f'Attempting to write the desired phrase {server_handle} to the search bar')
+    for letter in server_handle:
         pyautogui.press(letter)
         time.sleep(random.uniform(0.1, 0.25))
     time.sleep(0.5)
@@ -747,24 +868,42 @@ def writeServerToSearchBar(server_name):
 
 
 
+
+
+
+
+
+
+
+
+
+
 def findSquadWindowHandle():
-    windowlist = []
-    def winEnumHandler(hwnd, ctx):
-        window_name = str(win32gui.GetWindowText(hwnd))
-        if 'SquadGame' in window_name:
-            windowlist.append(hwnd)
-    win32gui.EnumWindows(winEnumHandler, None)
-    squad_window_handle = windowlist[0]
-    return squad_window_handle
+    # Necessary to work in a thread
+    try:
+        pythoncom.CoInitialize()
+        windowlist = []
+        def winEnumHandler(hwnd, ctx):
+            window_name = str(win32gui.GetWindowText(hwnd))
+            if 'SquadGame' in window_name:
+                windowlist.append(hwnd)
+        win32gui.EnumWindows(winEnumHandler, None)
+        squad_window_handle = windowlist[0]
+        return squad_window_handle
+    except Exception as err:
+        print(err)
+        if verbose:
+            print('The script was unable to find Squads window handle.')
 
 
 
 
 def forceSquadWindowToTop(window_handle):
-    win32gui.BringWindowToTop(window_handle)
-    shell = win32com.client.Dispatch('WScript.Shell')
-    shell.SendKeys('%')
     try:
+        pythoncom.CoInitialize()
+        win32gui.BringWindowToTop(window_handle)
+        shell = win32com.client.Dispatch('WScript.Shell')
+        shell.SendKeys('%')
         win32gui.SetForegroundWindow(window_handle)
         win32gui.ShowWindow(window_handle, 9)
         return window_handle
@@ -778,28 +917,35 @@ def forceSquadWindowToTop(window_handle):
 
 
 def findUsersMonitorResolution() -> (int, int):
-    screen_size_x, screen_size_y = pyautogui.size()
-    return screen_size_x, screen_size_y
+    try:
+        screen_size_x, screen_size_y = pyautogui.size()
+        return screen_size_x, screen_size_y
+    except Exception as err:
+        print(err)
+        print("Error when trying to find the user's resolution size")
 
 
 
 def findUsersGameWindowSize():
     """
+    Finds the size of the user's game window.
     :return:
     """
     try:
         squad_window_handle = findSquadWindowHandle()
+        # The game cannot be minimized when getting the window size, so forcing it to the foreground gets around that.
+        clientRect = win32gui.GetClientRect(squad_window_handle)
+        game_client_width, game_client_height = clientRect[2], clientRect[3]
+        return game_client_width, game_client_height
     except Exception:
         return None
-    # The game cannot be minimized when getting the window size, so forcing it to the foreground gets around that.
-    clientRect = win32gui.GetClientRect(squad_window_handle)
-    game_client_width, game_client_height = clientRect[2], clientRect[3]
-    return game_client_width, game_client_height
 
 
 
 
-def cleanSearchBar(length_to_clean):
+
+
+def cleanSearchbar(length_to_clean):
     """
     Cleans the server_ip/search bar that is currently active, up to a certain amount of characters
     :return:
@@ -807,6 +953,7 @@ def cleanSearchBar(length_to_clean):
     print('Attempting to clean the search bar')
     for i in range(length_to_clean):
         pyautogui.press('backspace')
+    return
 
 
 
@@ -818,7 +965,7 @@ def locateAndJoinServer(server_string_to_autojoin, server_name_picture,
                         game_resolution):
     """
     Function to click the necessary buttons and input the necessary strings to join the specified server automatically.
-    Will only work as long as the user is in the main menu.
+    Will only work as long as the user is in the main_loop menu.
     :param server_string_to_autojoin: The name of the server in string form. Should ideally be unique enough that only
     the desired server shows up
     :param server_name_picture: A picture of the desired server name, in the server browser,
@@ -830,14 +977,13 @@ def locateAndJoinServer(server_string_to_autojoin, server_name_picture,
     :param modded_server_icon: A picture of the modded server join button
     :return:
     """
-
+    clean_len = 25
     # Did this, so the script would check
     try:
         forceSquadWindowToTop(findSquadWindowHandle())
         time.sleep(0.2)
     except Exception:
         pass
-
     if checkIfAlreadyInBrowser(in_server_browser, in_server_browser_backup):
         for i in range(10):
             if findAndClickServerName(server_name_picture, modded_server_icon, game_resolution):
@@ -846,7 +992,7 @@ def locateAndJoinServer(server_string_to_autojoin, server_name_picture,
 
         if findAndClickSearchBar(search_bar, game_resolution):
             pyautogui.move(100, 0)
-            cleanSearchBar(25)
+            cleanSearchbar(clean_len)
             writeServerToSearchBar(server_string_to_autojoin)
 
             for i in range(10):
@@ -868,7 +1014,7 @@ def locateAndJoinServer(server_string_to_autojoin, server_name_picture,
 
 
         if findAndClickSearchBar(search_bar, game_resolution):
-            cleanSearchBar(25)
+            cleanSearchbar(clean_len)
             writeServerToSearchBar(server_string_to_autojoin)
             time.sleep(15)
 
@@ -908,10 +1054,10 @@ def cmdlineArgumentHandler():
                 print('     Some examples of use: "-thresh95", or "-thresh80". This would set the seeding threshold to 95 and 80, respectively')
                 print('')
             if argument == "-close":
-                userinput = "close"
+                desired_userinput = "close"
                 print("The game will be closed upon hitting the threshold")
             elif argument == "-shutdown":
-                userinput = "shutdown"
+                desired_userinput = "shutdown"
                 print("Your computer will shut down upon hitting the threshold")
             if argument == "-restorelast":
                 restoreLastUsedSettings(game_config_path)
@@ -936,13 +1082,13 @@ def cmdlineArgumentHandler():
 
 def iconAndImageHandler(resolution : str ='720p'):
     images_icons_dict = {
-    'server_in_browser': f'{icons_path}/icons/{resolution}/Server_name.png',
-    'server_browser_button': f'{icons_path}\\icons\\{resolution}\\Server_browser_button.png',
-    'search_bar' : f'{icons_path}\\icons\\{resolution}\\Search_bar.png',
-    'in_server_browser' : f'{icons_path}\\icons\\{resolution}\\In_server_browser.png',
-    'in_server_browser_backup' : f'{icons_path}\\icons\\{resolution}\\In_server_browser.png',
-    'join_modded_server': f'{icons_path}\\icons\\{resolution}\\Modded_server.png',
-    'squad_task_bar_icon': f'{icons_path}\\icons\\{resolution}\\Squad_title_bar.png'
+    'server_in_browser': f'{ICONS_PATH}\\{resolution}/Server_name.png',
+    'server_browser_button': f'{ICONS_PATH}\\{resolution}\\Server_browser_button.png',
+    'search_bar' : f'{ICONS_PATH}\\{resolution}\\Search_bar.png',
+    'in_server_browser' : f'{ICONS_PATH}\\{resolution}\\In_server_browser.png',
+    'in_server_browser_backup' : f'{ICONS_PATH}\\{resolution}\\In_server_browser.png',
+    'join_modded_server': f'{ICONS_PATH}\\{resolution}\\Modded_server.png',
+    'squad_task_bar_icon': f'{ICONS_PATH}\\{resolution}\\Squad_title_bar.png'
     }
 
     return\
@@ -951,7 +1097,7 @@ def iconAndImageHandler(resolution : str ='720p'):
     images_icons_dict['search_bar'], \
     images_icons_dict['in_server_browser'], \
     images_icons_dict['in_server_browser_backup'], \
-    images_icons_dict['join_modded_server'], \
+    images_icons_dict['join_modded_server'],
 
 
 def watchForInterrupt():
@@ -966,49 +1112,51 @@ def watchForInterrupt():
 
 
 
-def attempt_to_autojoin():
+
+
+
+
+
+
+
+
+def autojoinAttemptLoop(autojoin_delay: int, attempts_to_autojoin, server_handle_to_autojoin):
     # Just to click some inconsequential key in case the monitor is in sleep mode or something
     pyautogui.press('scroll lock')
-    users_game_width, users_game_height = 1280, 720
+
     # I did this so the overall time spent waiting would be more consistent on around start
-    time.sleep(game_start_to_autojoin_delay)
-    try:
-        forceSquadWindowToTop(findSquadWindowHandle())
-        users_game_width, users_game_height = findUsersGameWindowSize()
-    except IndexError:
-        print('The script likely tried to fetch your game resolution before the game had started properly')
-        print('A possible remedy for this might be an increase to your delay " in the config file.')
+    for i in range(autojoin_delay, 0, -1):
+        print(f'Attempting to autojoin in {i} seconds\n')
+        time.sleep(1)
+
+    users_game_width, users_game_height = findUsersGameWindowSize()
+    if users_game_width and users_game_height == (0, 0):
+        print('The script likely tried to fetch your game resolution before the game had started properly\n')
+        print('A possible remedy for this might be an increase to your delay " in the config file.\n')
         time.sleep(15)
-        try:
-            forceSquadWindowToTop(findSquadWindowHandle())
-            users_game_width, users_game_height = findUsersGameWindowSize()
-        except Exception as error:
-            print(error)
+
+    forceSquadWindowToTop(findSquadWindowHandle())
+    users_game_width, users_game_height = findUsersGameWindowSize()
 
     print(f"Detected game resolution is: {users_game_width}x{users_game_height}")
-    try:
-        forceSquadWindowToTop(findSquadWindowHandle())
-    except Exception:
-        pass
 
+    forceSquadWindowToTop(findSquadWindowHandle())
     resolution_from_folder_name = 0
-    for folder in os.scandir(icons_path):
+    for folder in os.scandir(ICONS_PATH):
 
         if os.path.isdir(folder):
-
             users_game_width, users_game_height = findUsersGameWindowSize()
-
             if folder.name.endswith('p'):
-
                 resolution_from_folder_name = int(folder.name.strip('p'))
-
             if users_game_height == resolution_from_folder_name:
+
                 for i in range(attempts_to_autojoin):
-                    try:
-                        forceSquadWindowToTop(findSquadWindowHandle())
-                        users_game_width, users_game_height = findUsersGameWindowSize()
-                    except Exception:
-                        print("Unable to find user's window size")
+
+                    forceSquadWindowToTop(findSquadWindowHandle())
+                    users_game_width, users_game_height = findUsersGameWindowSize()
+                    if (users_game_width or users_game_height) == 0:
+                        # Tries again if finding the user's game height doesen't work
+                        time.sleep(60)
                         continue
                     print(f'Initiating attempt to autojoin server with phrase: {server_handle_to_autojoin}')
                     print(f'Attempt #: {i + 1}')
@@ -1019,40 +1167,100 @@ def attempt_to_autojoin():
 
 
 
-
-
-
+# TODO remove this once enough testing has been done on multithreading together with PySimpleGui
 def simulate_gameloop():
     while not program_shutdown:
         print('test')
         time.sleep(5)
 
 
+def checkConfigFile(parameter_to_check : str, script_config_path: str):
+    with open(script_config_path, 'r') as f:
+        config_file_json = json.load(f)
+    for value in config_file_json['settings']:
+        if parameter_to_check == value:
+            return config_file_json['settings'][value]['value']
+
+def generateRandomThresh(random_thresh_enabled : bool, player_threshold : int, lower_thresh, upper_thresh) -> int:
+    """
+    Generates the random player threshold within the bounds, if applicable.
+    :param random_thresh_enabled:
+    :param player_threshold:
+    :return:
+    """
+    if random_thresh_enabled:
+        player_threshold = random.randint(lower_thresh, upper_thresh)
+    return player_threshold
 
 
+def initGameLaunch(random_thresh_enabled: bool, player_threshold: int,
+    game_launcher_path: str, game_url_handle: str, game_executable: str, lightweight_seeding_settings: bool,
+    lower_thresh, upper_thresh, config_path):
 
-def main():
-    try:
-        if random_seeding_threshold:
-            user_set_seeding_threshold = random.randint(random_thresh_lower, random_thresh_upper)
-        if lightweight_seeding_settings:
-            initializeGameSeedingConfig(game_config_path)
-        # Calls the command handler function to see if any arguments were supplied from commandline, if not runs the GUI
-    except Exception as error:
-        print(error)
+
+    game_started_by_script = False
+    seeding_settings_applied = False
+    player_threshold = generateRandomThresh(random_thresh_enabled, player_threshold, lower_thresh, upper_thresh)
+    initializeGameSeedingConfig(game_config_path, lightweight_seeding_settings)
     seeding_settings_restore_time = 0
     if not isProcessRunning(game_executable):
         game_started_by_script = True
         if lightweight_seeding_settings:
             applySeedingSettings(game_config_path)
-            applied_lightweight_settings = True
-        startGame(game_launcher=squad_game_launcher_path, game_url=game_url_handle)
+            seeding_settings_applied = True
+        launchGame(game_launcher=game_launcher_path, game_url=game_url_handle)
+
+        # Added this in so the script could restore settings right after the game launches.
+        # The amount of time the script will wait before restoring settings.
         seeding_settings_restore_time = 15
         time.sleep(seeding_settings_restore_time)
-        if lightweight_seeding_settings:
+        if lightweight_seeding_settings and seeding_settings_applied:
             restoreLastUsedSettings(game_config_path)
-            applied_lightweight_settings = False
             restored_original_settings = True
+
+
+
+def seedingSettingsApplied(config_folder):
+    config_file = f'{config_folder}\\seedingsettings.json'
+
+def main_loop(user_action: str):
+    """
+    Main logic for starting the seedingscript.
+    :return:
+    """
+    script_started_game = False
+
+    player_threshold, \
+    server_ip, \
+    query_port, \
+    sleep_interval, \
+    random_thresh_enabled, \
+    random_thresh_lower, \
+    random_thresh_upper, \
+    lightweight_seeding_settings_on, \
+    join_server_automatically, \
+    game_start_to_autojoin_delay, \
+    server_handle_to_autojoin, \
+    close_script_if_game_closed, \
+    attempt_autojoin_if_ingame, \
+    attempts_to_autojoin, \
+    game_executable, \
+    squad_game_launcher_path, \
+    game_config_path, \
+    game_url_handle, \
+    desired_useraction\
+    = readConfigJSON(config_settings_folder)
+
+
+    initGameLaunch(random_thresh_enabled=random_thresh_enabled,
+    player_threshold=player_threshold,
+    game_launcher_path=squad_game_launcher_path,
+    game_url_handle=game_url_handle,
+    game_executable=game_executable,
+    lightweight_seeding_settings=lightweight_seeding_settings_on,
+    lower_thresh=random_thresh_lower,
+    upper_thresh=random_thresh_upper,
+    config_path=config_settings_folder)
 
 
     # Adds a keyboard failsafe to stop the program.
@@ -1064,60 +1272,80 @@ def main():
         # This is a dumb workaround to make the start menu go away.
         try:
             keyboard.press_and_release('windows')
-            time.sleep(1)
+            time.sleep(0.5)
             pyautogui.click(x=1920 // 2, y=1080 // 2, button='middle')
         except Exception:
             pass
+
         if attempt_autojoin_if_ingame:
             print('Autojoin while in-game enabled.')
             print('Attempting to autojoin')
-            attempt_to_autojoin()
-
+            autojoinAttemptLoop(autojoin_delay=game_start_to_autojoin_delay,
+            attempts_to_autojoin=attempts_to_autojoin,
+            server_handle_to_autojoin=server_handle_to_autojoin)
         else:
             print('Autojoin while already ingame not enabled')
             print('Checking if the script started the game')
             if script_started_game:
                 print('Script started the game, attempting autojoin')
-                attempt_to_autojoin()
+                autojoinAttemptLoop(autojoin_delay=attempts_to_autojoin,
+                                    attempts_to_autojoin=attempts_to_autojoin,
+                                    server_handle_to_autojoin=server_handle_to_autojoin)
 
 
-
-
-
-def main_event_loop():
     threshold_hit = False
-    print(f"Your activation threshold is:  {user_set_seeding_threshold}")
+    server_address = (server_ip, query_port)
+    print(f"Your activation threshold is:  {player_threshold}")
+
     while not threshold_hit:
-        try:
-            if close_script_if_game_closed:
-                if not isProcessRunning(game_executable):
-                    if lightweight_seeding_settings and not restored_original_settings:
-                        restoreLastUsedSettings(game_config_path)
-                    sys.exit("Game not running, shutting down script")
-            now = datetime.datetime.now()
-            current_hour_min = now.strftime("%H:%M")
-            current_player_count = findCurrentPlayercount(server_ip)
-            print(f" {current_hour_min}  -- There are currently {current_player_count} players on the server")
-            if current_player_count >= user_set_seeding_threshold:
-                if userinput == 'close':
-                    gameclose(game_executable)
-                    if script_started_game:
-                        restoreLastUsedSettings(game_config_path)
-                        print('Game closed. Settings have been restored. Shutting down script.')
-                        threshold_hit = True
-                    else:
-                        print('Game have been closed. Shutting down script')
-                        threshold_hit = True
-                elif userinput == 'shutdown':
-                    if not script_started_game:
-                        restoreLastUsedSettings(game_config_path)
-                        print('Settings have been restored.')
-                    gameclose(game_executable)
-                    hibernate()
-                    sys.exit(0)
-        except Exception as error:
-            print(error)
+
+
+
+
+
+        if close_script_if_game_closed:
+            if not isProcessRunning(game_executable):
+                if lightweight_seeding_settings_on and not restored_original_settings:
+                    restoreLastUsedSettings(game_config_path)
+                sys.exit("Game not running, shutting down script")
+
+
+        now = datetime.datetime.now()
+        current_hour_min = now.strftime("%H:%M")
+        current_player_count = findCurrentPlayercount(server_address)
+        print(f" {current_hour_min}  -- There are currently {current_player_count} players on the server")
+        if current_player_count >= player_threshold:
+            if user_action == 'close':
+                closeGame(game_executable)
+                if script_started_game:
+                    restoreLastUsedSettings(game_config_path)
+                    print('Game closed. Settings have been restored. Shutting down script.')
+                    threshold_hit = True
+                else:
+                    print('Game have been closed. Shutting down script')
+                    threshold_hit = True
+            elif user_action == 'hibernate':
+                if not script_started_game:
+                    restoreLastUsedSettings(game_config_path)
+                    print('Settings have been restored.')
+                closeGame(game_executable)
+                hibernate()
+                sys.exit()
+            elif user_action == 'shutdown':
+                threshold_hit = True
+                shutdown()
+
         time.sleep(int(sleep_interval))
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1134,64 +1362,28 @@ if __name__ == '__main__':
     # Just initializing some parameters, that will be used and checked later.
     pyautogui.FAILSAFE = False
     threshold_hit = False
-    userinput = None
-    script_started_game = False
+    desired_useraction = None
     applied_seeding_settings = False
     restored_original_settings = False
     program_shutdown = False
+    verbose = True
+    time_list = []
+    player_count_list = []
+
+
 
     # Initializing paths
     local_appdata = os.environ['LOCALAPPDATA']
     config_settings_folder = os.path.abspath(f'{local_appdata}/SeedingScript')
     config_settings_file = os.path.abspath(f'{config_settings_folder}/seedingconfig.json')
-    icons_path = os.path.join(f'{config_settings_folder}/icons')
-
-    programfiles_32 = os.environ["ProgramFiles(x86)"]
-    programfiles_64 = os.environ['ProgramW6432']
-
-
     game_config_path = os.path.abspath(f"{local_appdata}/SquadGame/Saved/Config/WindowsNoEditor")
-    game_launcher_path_32 = f'{programfiles_32}/Steam/steamapps/common/Squad/squad_launcher.exe'
-    game_launcher_path_64 = f'{programfiles_64}/Steam/steamapps/common/Squad/squad_launcher.exe'
-    game_launcher_path = game_launcher_path_32 if os.path.exists(game_launcher_path_32) else game_launcher_path_64
+    ICONS_PATH = os.path.join(f'{config_settings_folder}/icons')
 
 
-    initConfigJSON(config_settings_folder, game_launcher_path_64, game_config_path)
-
-    # Starts the main window.
-
-
+    initConfigJSON(config_settings_folder)
     #cmdlineArgumentHandler()
-
-    player_threshold, \
-    server_ip, \
-    query_port, \
-    sleep_interval, \
-    random_thresh_enabled, \
-    random_thresh_lower, \
-    random_thresh_upper, \
-    lightweight_seeding_settings, \
-    join_server_automatically, \
-    game_start_to_autojoin_delay, \
-    server_handle_to_autojoin, \
-    close_script_if_game_closed, \
-    attempt_autojoin_if_ingame, \
-    attempts_to_autojoin, \
-    game_executable, \
-    squad_game_launcher_path, \
-    game_config_path, \
-    game_url_handle, \
-    desired_useraction = readConfigJSON(config_settings_folder)
-
     main_window()
 
-
-
-
-
-
-    if desired_useraction == 'shutdown' or desired_useraction == 'close':
-        main_event_loop()
 
 
 

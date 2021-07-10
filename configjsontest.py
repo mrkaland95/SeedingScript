@@ -44,7 +44,7 @@ def initConfig(config_folder: str, game_path: str, game_config_path):
                         'value': 98,
                         'description': 'The upper bound of the random seeding threshold'
                     },
-                    'lightweight_seeding_settings': {
+                    'lightweight_seeding_settings_on': {
                         'value': True,
                         'description': 'Whether lightweight seeding settings should be enabled.'
 
@@ -129,7 +129,7 @@ def readConfig(config_folder: str):
     random_seeding_thresh = config_file_json['settings']['random_seeding_thresh']['value']
     random_thresh_lower = config_file_json['settings']['random_seeding_thresh_lower']['value']
     random_thresh_upper = config_file_json['settings']['random_seeding_thresh_upper']['value']
-    lightweight_seeding_settings = config_file_json['settings']['lightweight_seeding_settings']['value']
+    lightweight_seeding_settings = config_file_json['settings']['lightweight_seeding_settings_on']['value']
     join_server_automatically = config_file_json['settings']['join_server_automatically']['value']
     game_start_to_autojoin_delay = config_file_json['settings']['game_start_to_autojoin_delay']['value']
     server_handle_to_autojoin = config_file_json['settings']['server_handle_to_autojoin']['value']
@@ -179,7 +179,6 @@ def readConfig(config_folder: str):
 
 
 if __name__ == '__main__':
-    game_launcher_path = ""
 
     local_appdata = os.environ['LOCALAPPDATA']
     config_settings_path = f'{local_appdata}/SeedingScript'
