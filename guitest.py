@@ -130,7 +130,7 @@ def initConfigJSON(config_folder: str, game_path: str, game_config_path: str):
                         'value': f'{game_path}',
                         'description': 'The path to the games launcher. No longer really necessary, but used as a backup'
                     },
-                    'game_config_path': {
+                    'GAME_CONFIG_PATH': {
                         'value': f'{game_config_path}',
                         'description': ''
                     },
@@ -184,7 +184,7 @@ def readConfigJSON(config_folder: str):
     attempts_to_autojoin = config_file_json['settings']['attempts_to_auto_join_server']['value']
     game_executable = config_file_json['settings']['game_executable']['value']
     squad_install = config_file_json['settings']['squad_install']['value']
-    game_config_path = config_file_json['settings']['game_config_path']['value']
+    game_config_path = config_file_json['settings']['GAME_CONFIG_PATH']['value']
     game_url_handle = config_file_json['settings']['game_url']['value']
     desired_useraction = config_file_json['settings']['desired_useraction']['value']
 
@@ -244,7 +244,7 @@ def updateConfigJSON(config_folder: str):
     config_file_json['settings']['attempts_to_auto_join_server']['value'] = attempts_to_autojoin
     config_file_json['settings']['game_executable']['value'] = game_executable
     config_file_json['settings']['squad_install']['value'] = squad_install
-    config_file_json['settings']['game_config_path']['value'] = game_config_path
+    config_file_json['settings']['GAME_CONFIG_PATH']['value'] = game_config_path
     config_file_json['settings']['game_url']['value'] = game_url_handle
 
     with open(script_config_path, 'w') as f:
@@ -300,7 +300,7 @@ def settings_window():
 
             [sgui.Checkbox('Close Script Automatically If Game Closes', default=close_script_if_game_closed,
             key='-CLOSE_IF_NOT_RUNNING-', enable_events=True, tooltip=
-            'Whether the script will close itself should the game be closed, after the script main_loop logic loop has started'
+            'Whether the script will close itself should the game be closed, after the script main_seeding_loop logic loop has started'
             "Does not affect regular shutdown if that's the chosen action. ")],
 
             [sgui.Checkbox('Attempt To Autojoin If Already Ingame', default=attempt_autojoin_if_ingame,
@@ -318,7 +318,7 @@ def settings_window():
             element_justification='center'),
 
 
-        # Right bottom frame on the left main_loop frame.
+        # Right bottom frame on the left main_seeding_loop frame.
         sgui.Frame("", layout=[
             [sgui.Text('Attempts To Autojoin')],
             [sgui.InputText(key='-ATTEMPTS_TO_AUTOJOIN-', size=(5, 5), default_text=attempts_to_autojoin, enable_events=True,
@@ -383,7 +383,7 @@ def settings_window():
         '-GAME_INSTALL-': 'squad_install',
         '-GAME_START_DELAY-': 'game_start_to_autojoin_delay',
         '-ATTEMPTS_TO_AUTOJOIN-': 'attempts_to_auto_join_server',
-        '-GAME_CONFIG_PATH-': 'game_config_path',
+        '-GAME_CONFIG_PATH-': 'GAME_CONFIG_PATH',
         '-GAME_EXECUTABLE-': 'game_executable',
         '-AUTOJOIN_IF_INGAME-': 'attempt_autojoin_if_ingame',
         '-SERVER_HANDLE-': 'server_handle_to_autojoin'

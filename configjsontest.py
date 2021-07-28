@@ -89,7 +89,7 @@ def initConfig(config_folder: str, game_path: str, game_config_path):
                                 'value': f'{game_path}',
                                 'description': 'The path to the games launcher. No longer really necessary, but used as a backup'
                             },
-                            'game_config_path': {
+                            'GAME_CONFIG_PATH': {
                                 'value': f'{game_config_path}',
                                 'description': ''
                             },
@@ -138,7 +138,7 @@ def readConfig(config_folder: str):
     attempts_to_autojoin = config_file_json['settings']['attempts_to_auto_join_server']['value']
     game_executable = config_file_json['other']['paths']['game_executable']['value']
     squad_install = config_file_json['other']['paths']['squad_install']['value']
-    game_config_path = config_file_json['other']['paths']['game_config_path']['value']
+    game_config_path = config_file_json['other']['paths']['GAME_CONFIG_PATH']['value']
     game_url_handle = config_file_json['other']['paths']['game_url']['value']
 
     return seed_thresh,\
@@ -197,8 +197,8 @@ if __name__ == '__main__':
     config_parameters = []
 
     #print(game_launcher_path)
-    #initConfigJSON(config_folder=config_settings_folder, game_path=game_launcher_path, game_config_path="")
-    #config_parameters.append(readConfigJSON(config_settings_folder))
+    #init_JSON_config(config_folder=CONFIG_SETTINGS_FOLDER, game_path=game_launcher_path, GAME_CONFIG_PATH="")
+    #config_parameters.append(readConfigJSON(CONFIG_SETTINGS_FOLDER))
     #print(config_parameters)
 
     seeding_threshold,\

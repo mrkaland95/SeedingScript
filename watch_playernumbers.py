@@ -5,7 +5,7 @@ import sys
 import datetime
 
 import configparser
-from SeedingScript import findCurrentPlayercount
+from SeedingScript import find_current_playercount
 
 # This is intended for Flax' personal use, experimental script to join the server on my secondary devices if the server dips below a certain threshold
 # And within a specified timeframe.
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     player_limit = 75
 
     while True:
-        playercount = findCurrentPlayercount(server_address)
+        playercount = find_current_playercount(server_address)
         current_time = datetime.datetime.utcnow()
         if playercount >=
 
