@@ -2,7 +2,6 @@ import threading
 import configparser
 import PySimpleGUI as sg
 import datetime
-import filecmp
 import json
 import os
 import random
@@ -17,11 +16,7 @@ import pyautogui
 import pythoncom
 import win32com.client
 import win32gui
-import pathlib
 from copy import deepcopy
-
-
-import multiprocessing
 from collections import OrderedDict
 
 
@@ -490,7 +485,7 @@ def init_JSON_config(config_file: str):
 def initGameSeedingConfig():
     """
     Initializes the gameconfig files for setting applying seeding settings, if applicable.
-    :param configfile_name:
+    :param:
     :return:
     """
     config = load_Config()
@@ -544,7 +539,7 @@ def initGameSeedingConfig():
 def apply_seeding_settings():
     """
     Applies the lightweight seeding settings when called.
-    :param game_config_path:
+    :param:
     :return:
     """
     config = load_Config()
@@ -1314,7 +1309,7 @@ def init_config_folder(config_folder_path: str):
         os.mkdir(config_folder_path)
 
 
-def remove_old_icons_folder(icon_folder_path):
+def remove_old_icons_folder():
     dir_path = os.path.dirname(os.path.realpath(__file__))
     icon_folder_local = os.path.join(f'{dir_path}/icons')
     os.rmdir(icon_folder_local)
