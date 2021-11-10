@@ -195,7 +195,7 @@ if __name__ == '__main__':
     EOS = '\n'
 
     script_path = 'SeedingScript.py'
-    script_path_cage = 'The_Cage_SeedingScript.py'
+    script_path_cage = 'TheCage_SeedingScript.py'
 
     ACTIVATION_KEYS = {
         "!START_SEEDING_CAGE" + EOS: script_path_cage,

@@ -51,6 +51,7 @@ class SquadServer:
         except Exception as err:
             print(err)
             print('The connection to the server timed out')
+            return 0
 
 
 def check_if_python_script_running(script_name: str):
@@ -90,7 +91,7 @@ def command(path):
 
 
 
-def start_seeding_script(target: list):
+def start_seeding_script_clean(target: list):
     """
     Starts the seedingscript for the desired server, and closes the game to hopefully ensure proper
     launch of the game.
@@ -101,14 +102,15 @@ def start_seeding_script(target: list):
     try:
         kill_process('SquadGame.exe')
         process = check_if_python_script_running('seedingscript.py')
-        # Kills the currently running seedingscript.
+        # Kills the currently python_script_running seedingscript.
         # This check needs to be here, otherwise the server process will terminate itself.
         if process is not None:
             print(process.cmdline())
             kill_process(None, process)
-        time.sleep(10)
+        time.sleep(5)
         print(f'Attempting to launch {target[1]}')
         subprocess.Popen(target)
+        time.sleep(10)
         return True
     except Exception as err:
         print(err)
@@ -159,6 +161,27 @@ def correct_time(upper_time_limit, lower_time_limit):
         return False
 
 
+def process_running(executable):
+    """
+    Checks if the supplied process is running, returns a boolean.
+    """
+    try:
+        game_running = executable.lower() in (p.name().lower() for p in psutil.process_iter())
+        return game_running
+    except Exception as error:
+        print(error)
+        print("Something went wrong in finding the game process")
+
+
+def player_in_server(ip, query_port, player) -> bool:
+    server_players = a2s.players((ip, query_port))
+    for m_player in server_players:
+        if player.lower() in m_player.name.lower():
+            return True
+    return False
+
+
+
 def handle_args():
     """
     Handles inputs from the command line.
@@ -170,10 +193,10 @@ def handle_args():
             name = arg[i+1]
 
 
-def running(script_name: str) -> bool:
+def python_script_running(script_name: str) -> bool:
     """
-    Determines if a specific python script is running.
-    Checks all the running python processes and checks checks if the script name is found in it.
+    Determines if a specific python script is python_script_running.
+    Checks all the python_script_running python processes and checks checks if the script name is found in it.
     :param script_name:
     :return:
     """
@@ -184,53 +207,91 @@ def running(script_name: str) -> bool:
     return False
 
 
+def init_json_config(config_path):
+    config = {
+        'player_name': 'derpman',
+        'query_interval': 60,
+    }
+
+
+
+    with open(config_path, 'w') as f:
+        json.dump(config, f ,  indent=4)
+
+
+
+
+
+
+
 def main():
     LOCAL_APPDATA = os.path.abspath(os.environ['LOCALAPPDATA'])
     CONFIG_PATH_BASE = os.path.abspath(f'{LOCAL_APPDATA}/SeedingScript')
     CONFIG_PATH_TRIG = os.path.abspath(f"{CONFIG_PATH_BASE}/seedingconfig.json")
     CONFIG_PATH_CAGE = os.path.abspath(f"{CONFIG_PATH_BASE}/seedingconfig_cage.json")
+    ONLY_ACTIVE_IF_IDLE = False
+
     LOWER_HOUR = 8
     UPPER_HOUR = 20
-    QUERY_INTERVAL_SECONDS = 120
+    QUERY_INTERVAL_SECONDS = 30
+    QUERY_INTERVAL_SECONDS = 5  # for testing, remove when done
+    PLAYER = 'flaxelaxen'
+
     player_threshold = 85
 
+
     # Creates the server objects
-    theCage = SquadServer('The Cage', 'SeedingScript_TheCage_Derpman.py', CONFIG_PATH_CAGE)
-    tacTrig = SquadServer('Tactical Triggernometry', 'SeedingScript.py', CONFIG_PATH_TRIG)
+    theCage = SquadServer('TheCage', 'TheCage_SeedingScript.py', CONFIG_PATH_CAGE)
+    tacTrig = SquadServer('TacticalTriggernometry', 'SeedingScript_TacticalTriggernometry.py', CONFIG_PATH_TRIG)
 
-    current_priority_level = 1
-    timeout_buffer = 0
-    buffer_threshold = 5
+    prty_to_srvr_map = {
+        1: theCage,
+        2: tacTrig,
+    }
 
-    server = None
+
+    timeout = 0
+    timeout_limit = 5
+
+
 
     # Decided to use an infinite loop, instead of something like "while correct_time" since that would
     # Jump out of the loop once it's the wrong time and not run again.
+
     while True:
-        # Guard to check it it's the correct time. Otherwise just waits and
-        if not correct_time(LOWER_HOUR, UPPER_HOUR):
-            time.sleep(QUERY_INTERVAL_SECONDS)
+        # Guard to check it it's the correct time. Otherwise just waits and occasionally rechecks.
+        # if not correct_time(LOWER_HOUR, UPPER_HOUR):
+        #     print('Not in correct time')
+        #     time.sleep(QUERY_INTERVAL_SECONDS)
+        #     continue
+
+
+        prty_lvl = 1  # Lower number is higher priority.
+        for m_srv in prty_to_srvr_map:
+            server = prty_to_srvr_map[m_srv]
+            # If the server does not need seeding, then increment the priority
+            if server.player_count() >= player_threshold:
+                prty_lvl += 1
+
+        if prty_lvl > len(prty_to_srvr_map) + 1:
             continue
 
-        if serverLevel(current_priority_level).name == 'THE_CAGE':
-            server = theCage
-        elif serverLevel(current_priority_level).name == 'TACTICAL_TRIGGERNOMETRY':
-            server = tacTrig
+        server = prty_to_srvr_map[prty_lvl]
 
-        if server.player_count() >= player_threshold:
-            # A timeout buffer so the script doesen't instantly stop the game.
-            timeout_buffer += 1
-            if timeout_buffer > buffer_threshold:
-                current_priority_level += 1
-                timeout_buffer = 0
-            if current_priority_level > len(serverLevel):  # Returns back to 1 if the priority level overflows.
-                current_priority_level = 1
-            continue
-        else:
-            if not running(server.script_path):
+        if not player_in_server(server.address, server.port, PLAYER):
+            print(f'{PLAYER.capitalize()} is not in the {server.name}')
+            if not python_script_running(server.script_path) or not process_running('SquadGame.exe'):
                 print(f'Attempting to connect to {server.name}')
-                subprocess.Popen(['python', server.script_path, '-close'])
-        current_priority_level = 1
+                start_seeding_script_clean(['python', server.script_path, '-close'])
+            else:
+                timeout += 1
+            # Counts up a buffer if the player is not found in
+            if timeout > timeout_limit:
+                start_seeding_script_clean(['python', server.script_path, '-close'])
+                timeout = 0
+        else:
+            print(f'{PLAYER.capitalize()} is in the server: {server.name}')
+            timeout = 0
         time.sleep(QUERY_INTERVAL_SECONDS)
 
 

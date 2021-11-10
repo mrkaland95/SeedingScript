@@ -18,7 +18,6 @@ import pyautogui
 import pythoncom
 import win32com.client
 import win32gui
-from logging import DEBUG
 from copy import deepcopy
 from collections import OrderedDict
 
@@ -27,7 +26,7 @@ CONFIG_SETTINGS_FOLDER = os.path.abspath(f'{LOCAL_APPDATA}/SeedingScript')
 CONFIG_SETTINGS_FILE = os.path.abspath(f'{CONFIG_SETTINGS_FOLDER}/seedingconfig_cage.json')
 GAME_CONFIG_PATH = os.path.abspath(f"{LOCAL_APPDATA}/SquadGame/Saved/Config/WindowsNoEditor")
 ICONS_PATH = os.path.abspath(f'{CONFIG_SETTINGS_FOLDER}/icons_cage')
-gui_window_theme = 'DarkGrey14'
+GUI_WINDOW_THEME = 'DarkGrey14'
 
 
 SAMPLES = 100
@@ -53,8 +52,9 @@ class MultiOrderedDict(OrderedDict):
         else:
             super().__setitem__(key, value)
 
+
 def save_prompt():
-    sg.theme(gui_window_theme)
+    sg.theme(GUI_WINDOW_THEME)
     layout = [
     [sg.Text('There are unsaved changes. Do you want to save them before exiting?')],
     [sg.Button('Save and Exit'), sg.Button('Exit without saving')]
@@ -71,10 +71,9 @@ def settings_window():
     programfiles_32 = os.environ["ProgramFiles(x86)"]
 
     # Reloads the parameters from the config file.
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     # Creates a copy of the original config to see if any changes has been made
     config_baseline = deepcopy(config)
-
     player_threshold = config['player_threshold']['value']
     server_ip = config['server_address']['value']
     query_port = config['query_port']['value']
@@ -96,25 +95,20 @@ def settings_window():
     player_name = config['player_name']['value']
     attempt_reconnect = config['attempt_reconnect']['value']
 
-
     # so the value can be update in the slider without affecting the global variable
     #lower_thresh_internal = random_thresh_lower
 
-
-
-    sg.theme(gui_window_theme)
+    sg.theme(GUI_WINDOW_THEME)
     sg.SystemTray(tooltip='SeedingScript')
-
-
 
     # Defining the left side of GUI, contains boolean settings and some other fields.
     left_col = sg.Column([
     [sg.Frame('', layout=[
-        [sg.Text('ServerEnum IP/Domain', font=('Helvetica', 14)), sg.Text('Player Threshold', font=('Helvetica', 14), pad=(120, 0))],
+        [sg.Text('ServerClient IP/Domain', font=('Helvetica', 14)), sg.Text('Player Threshold', font=('Helvetica', 14), pad=(120, 0))],
         [sg.InputText(size=(18, 20), key='-SERVER_IP-', default_text=server_ip, enable_events=True),
          sg.InputText(size=(5, 10), key='-PLAYER_THRESHOLD-', default_text=player_threshold, enable_events=True, pad=(55, 0))],
 
-        [sg.Text('ServerEnum query port', font=('Helvetica', 14))],
+        [sg.Text('ServerClient query port', font=('Helvetica', 14))],
         [sg.InputText(size=(18, 20), key='-QUERY_PORT-', default_text=query_port, enable_events=True)],
 
         # Inner frame for on/off settings
@@ -150,11 +144,6 @@ def settings_window():
             'Whether the script will attempt to reconnect when the player name is not found in the server. By default off.'
             'Do note that an accurate player name should be specified if this setting is enabled, otherwise the'
             'script will attempt to constantly rejoin without being able to.')]
-
-
-
-
-
         ])],
 
         [sg.Frame('Threshold of players', [
@@ -171,7 +160,7 @@ def settings_window():
             [sg.InputText(key='-ATTEMPTS_TO_AUTOJOIN-', size=(5, 5), default_text=attempts_to_autojoin, enable_events=True,
                           tooltip='How many attempts the script will attempt to autojoin the server before giving up')],
 
-            [sg.Text('ServerEnum query and sleep interval')],
+            [sg.Text('ServerClient query and sleep interval')],
             [sg.InputText(key='-SLEEP_INTERVAL-', size=(5, 5), default_text=sleep_interval, enable_events=True, tooltip=
             'How often the program will try and query the server for player numbers, defined in sconds. Default is 60 seconds, but generally shouldnt need to be touched')],
 
@@ -200,7 +189,7 @@ def settings_window():
         [sg.InputText(size=(35, 20), key='-GAME_CONFIG_PATH-',
                       default_text=game_config_path, enable_events=True), sg.FolderBrowse(initial_folder=LOCAL_APPDATA)],
 
-        [sg.Text('ServerEnum name to autojoin', font=('helvetica', 14))],
+        [sg.Text('ServerClient name to autojoin', font=('helvetica', 14))],
         [sg.InputText(size=(35, 20), key='-SERVER_HANDLE-', default_text=server_handle_to_autojoin, enable_events=True)],
 
         [sg.Text('Player name', font=('helvetica', 14), tooltip="The player's in game name. Not case sensitive, and tags are not required")],
@@ -216,6 +205,7 @@ def settings_window():
     [[sg.Text('Settings', font=('helvetica', 26))],
      [left_col, right_col],
      [sg.Button('Save', key='SAVE')]]
+
     window = sg.Window('SeedingScript settings', layout, font=('Helvetica', 16), resizable=True, finalize=True)
 
     # To iterate over the keys and values, to update the config file
@@ -255,6 +245,7 @@ def settings_window():
 
         for valid_event in valid_events:
             if event == valid_event:
+                # Handles all the numerical fields, and resets the window to 0 if the field isn't an integer.
                 if event in ('-PLAYER_THRESHOLD-', '-QUERY_PORT-', '-SLEEP_INTERVAL-', '-ATTEMPTS_TO_AUTOJOIN-', '-GAME_START_DELAY-'):
                     if values[valid_event] == "":
                         window.Element(valid_event).Update(0)
@@ -286,7 +277,7 @@ def main_window():
     :return:
     """
     global seeding_process
-    sg.theme(gui_window_theme)
+    sg.theme(GUI_WINDOW_THEME)
     menu_def = [['Settings', ['&Open']]]
     right_col = [sg.Column([
         # TODO Fill in graph code here
@@ -365,13 +356,12 @@ def main_window():
     sys.exit()
 
 
-def load_config() -> dict:
+def load_config(config_path) -> dict:
     """
     Loads the settings from the config files.
     :return: Python dictionary with all the settings from the config file
     """
-    script_config_path = f'{CONFIG_SETTINGS_FOLDER}\\seedingconfig.json'
-    with open(script_config_path, 'r') as f:
+    with open(config_path, 'r') as f:
         config_file_json = json.load(f)
     return config_file_json
 
@@ -382,7 +372,7 @@ def user_action_window():
     :return:
     """
 
-    sg.theme(gui_window_theme)
+    sg.theme(GUI_WINDOW_THEME)
 
     layout = \
     [
@@ -422,7 +412,6 @@ def user_action_window():
             if event in user_actions:
                 desired_useraction = user_actions[event]
                 seeding_process = multiprocessing.Process(target=main_seeding_loop, daemon=True, kwargs={'user_action': desired_useraction})
-                multiprocessing.log_to_stderr(DEBUG)
                 seeding_process.name = 'seeding_process'
                 seeding_process.start()
                 if not seeding_process.is_alive():
@@ -574,7 +563,7 @@ def init_games_seeding_config():
     :param:
     :return:
     """
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     lightweight_seeding_settings = config["lightweight_seeding_settings_on"]['value']
     game_config_path = config["game_config_path"]["value"]
 
@@ -639,7 +628,7 @@ def init_game_launch():
     global game_started_by_script
 
     delay_from_game_launch = 60
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     lightweight_seeding_settings = config["lightweight_seeding_settings_on"]['value']
     game_executable = config["game_executable"]['value']
     game_url = config["game_url"]["value"]
@@ -655,7 +644,7 @@ def init_game_launch():
 
 
 def check_current_seeding_settings():
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     game_config_path = config["game_config_path"]['value']
     game_config_file = f'{game_config_path}\\GameUserSettings.ini'
 
@@ -668,7 +657,7 @@ def apply_seeding_settings(compare_config: bool = True):
     :param:
     :return:
     """
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     game_config_path = config["game_config_path"]['value']
     lightweight_settings_applied = bool(config['lightweight_settings_applied']['value'])
     original_path = os.path.abspath(game_config_path)
@@ -748,7 +737,7 @@ def restore_last_used_settings(compare_settings: bool = True, restore_delay: boo
     :return:
     """
     # Loads the config object to get needed settings.
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
 
     game_config_path = config['game_config_path']['value']
 
@@ -784,7 +773,7 @@ def restore_last_used_settings_plain():
        Restores user's original config file to the game when called
        :return:
        """
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
 
     game_config_path = config['game_config_path']['value']
 
@@ -833,7 +822,7 @@ def restore_original_settings():
     Currently the intention is to have a button the user can use to call on this, with a warning.
     """
 
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     game_config_path = config['game_config_path']['value']
     backup_configs_path = os.path.abspath(f'{game_config_path}\Backup')
     current_active_config_file = os.path.abspath(f'{game_config_path}\GameUserSettings.ini')
@@ -1147,7 +1136,7 @@ def recognise_button_center():
 def locate_and_join_server(server_string_to_autojoin, server_name_picture,
                            server_browser_button, search_bar, in_server_browser,
                            in_server_browser_backup, modded_server_icon,
-                           game_resolution, reconnect_img):
+                           game_resolution):
     """
     Function to click the necessary buttons and input the necessary strings to join the specified server automatically.
     Will only work as long as the user is in the main_seeding_loop menu.
@@ -1304,7 +1293,7 @@ def watch_for_interrupt():
 def autojoin_loop():
     # Just to click some inconsequential key in case the monitor is in sleep mode or something
     pyautogui.press('scroll lock')
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
 
     autojoin_delay = config['game_start_to_autojoin_delay']['value']
     attempts_to_autojoin = config['attempts_to_auto_join_server']['value']
@@ -1398,7 +1387,7 @@ def main():
     # Loads the config settings to memory
     init_games_seeding_config()
 
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
 
     #lightweight_settings = config['lightweight_settings_on']
 
@@ -1476,7 +1465,7 @@ def main_seeding_loop(user_action: str, resolution: str = "720p"):
 
     script_started_game = False
     threshold_hit = False
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
 
     join_server_automatically = config['join_server_automatically']['value']
     attempt_autojoin_if_ingame = config['attempt_autojoin_if_ingame']['value']
@@ -1495,16 +1484,16 @@ def main_seeding_loop(user_action: str, resolution: str = "720p"):
 
     # Makes sure settings are in correct types before attempting to run the seeding loop.
     # Get the error sooner rather than later
-    assert isinstance(join_server_automatically, bool)
-    assert isinstance(attempt_autojoin_if_ingame, bool)
-    assert isinstance(query_port, int)
-    assert isinstance(player_threshold, int)
-    assert isinstance(close_script_if_game_closed, bool)
-    assert isinstance(lightweight_seeding_settings_on, bool)
-    assert isinstance(sleep_interval, int)
-    assert isinstance(random_seeding_thresh_upper, int)
-    assert isinstance(random_seeding_thresh_lower, int)
-    assert isinstance(random_player_thresh, bool)
+    # assert isinstance(join_server_automatically, bool)
+    # assert isinstance(attempt_autojoin_if_ingame, bool)
+    # assert isinstance(query_port, int)
+    # assert isinstance(player_threshold, int)
+    # assert isinstance(close_script_if_game_closed, bool)
+    # assert isinstance(lightweight_seeding_settings_on, bool)
+    # assert isinstance(sleep_interval, int)
+    # assert isinstance(random_seeding_thresh_upper, int)
+    # assert isinstance(random_seeding_thresh_lower, int)
+    # assert isinstance(random_player_thresh, bool)
 
     if random_player_thresh:
         player_threshold = random.randint(random_seeding_thresh_lower, random_seeding_thresh_upper)
@@ -1590,6 +1579,9 @@ def main_seeding_loop(user_action: str, resolution: str = "720p"):
 
 
 if __name__ == '__main__':
+
+
+
     seeding_process = None
     seeding_script_version = 3.0
     # Just initializing some parameters, that will be used and checked later.

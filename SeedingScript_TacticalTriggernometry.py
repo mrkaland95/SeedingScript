@@ -78,7 +78,7 @@ def settings_window():
     programfiles_32 = os.environ["ProgramFiles(x86)"]
 
     # Reloads the parameters from the config file.
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     # Creates a copy of the original config to see if any changes has been made
     config_baseline = deepcopy(config)
     player_threshold = config['player_threshold']['value']
@@ -363,12 +363,12 @@ def main_window():
     sys.exit()
 
 
-def load_config() -> dict:
+def load_config(config_path) -> dict:
     """
     Loads the settings from the config files.
     :return: Python dictionary with all the settings from the config file
     """
-    script_config_path = f'{CONFIG_SETTINGS_FOLDER}\\seedingconfig.json'
+    script_config_path = config_path
     with open(script_config_path, 'r') as f:
         config_file_json = json.load(f)
     return config_file_json
@@ -570,7 +570,7 @@ def init_games_seeding_config():
     :param:
     :return:
     """
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     lightweight_seeding_settings = config["lightweight_seeding_settings_on"]['value']
     game_config_path = config["game_config_path"]["value"]
 
@@ -635,7 +635,7 @@ def init_game_launch():
     global game_started_by_script
 
     delay_from_game_launch = 60
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     lightweight_seeding_settings = config["lightweight_seeding_settings_on"]['value']
     game_executable = config["game_executable"]['value']
     game_url = config["game_url"]["value"]
@@ -651,7 +651,7 @@ def init_game_launch():
 
 
 def check_current_seeding_settings():
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     game_config_path = config["game_config_path"]['value']
     game_config_file = f'{game_config_path}\\GameUserSettings.ini'
 
@@ -662,7 +662,7 @@ def apply_seeding_settings(compare_config: bool = True):
     :param:
     :return:
     """
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     game_config_path = config["game_config_path"]['value']
     lightweight_settings_applied = bool(config['lightweight_settings_applied']['value'])
 
@@ -748,7 +748,7 @@ def restore_last_used_settings(compare_settings: bool = True, restore_delay: boo
     :return:
     """
     # Loads the config object to get needed settings.
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
 
     game_config_path = config['game_config_path']['value']
 
@@ -784,7 +784,7 @@ def restore_last_used_settings_plain():
        Restores user's original config file to the game when called
        :return:
        """
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
 
     game_config_path = config['game_config_path']['value']
 
@@ -833,7 +833,7 @@ def restore_original_settings():
     Currently the intention is to have a button the user can use to call on this, with a warning.
     """
 
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
     game_config_path = config['game_config_path']['value']
     backup_configs_path = os.path.abspath(f'{game_config_path}\Backup')
     current_active_config_file = os.path.abspath(f'{game_config_path}\GameUserSettings.ini')
@@ -1308,7 +1308,7 @@ def watch_for_interrupt():
 def autojoin_loop():
     # Just to click some inconsequential key in case the monitor is in sleep mode or something
     pyautogui.press('scroll lock')
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
 
     autojoin_delay = config['game_start_to_autojoin_delay']['value']
     attempts_to_autojoin = config['attempts_to_auto_join_server']['value']
@@ -1402,7 +1402,7 @@ def main():
     # Loads the config settings to memory
     init_games_seeding_config()
 
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
 
     #lightweight_settings = config['lightweight_settings_on']
 
@@ -1478,7 +1478,7 @@ def main_seeding_loop(user_action: str, resolution: str = "720p"):
 
     script_started_game = False
     threshold_hit = False
-    config = load_config()
+    config = load_config(CONFIG_SETTINGS_FILE)
 
     join_server_automatically = config['join_server_automatically']['value']
     attempt_autojoin_if_ingame = config['attempt_autojoin_if_ingame']['value']
