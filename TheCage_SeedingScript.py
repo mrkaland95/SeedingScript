@@ -1135,7 +1135,7 @@ def recognise_button_center():
 
 def locate_and_join_server(server_string_to_autojoin, server_name_picture,
                            server_browser_button, search_bar, in_server_browser,
-                           in_server_browser_backup, modded_server_icon,
+                           in_server_browser_backup, modded_server_icon, reconnect_img,
                            game_resolution):
     """
     Function to click the necessary buttons and input the necessary strings to join the specified server automatically.
@@ -1502,18 +1502,16 @@ def main_seeding_loop(user_action: str, resolution: str = "720p"):
     init_games_seeding_config()
     init_game_launch()
 
-    # Adds a keyboard failsafe to stop the program.
-    #keyboard.add_hotkey('ctrl+shift+s', failsafe)
 
     if join_server_automatically:
         # Discovered some problems with the autojoin functionality after waking up from hibernation.
         # This is a dumb workaround to make the start menu go away.
-        try:
-            keyboard.press_and_release('windows')
-            time.sleep(0.5)
-            pyautogui.click(x=1920 // 2, y=1080 // 2, button='middle')
-        except Exception as err:
-            print(f'{err} \n')
+        # try:
+        #     keyboard.press_and_release('windows')
+        #     time.sleep(0.5)
+        #     pyautogui.click(x=1920 // 2, y=1080 // 2, button='middle')
+        # except Exception as err:
+        #     print(f'{err} \n')
 
         if attempt_autojoin_if_ingame:
             print('Autojoin while in-game enabled.\n')
@@ -1571,8 +1569,8 @@ def main_seeding_loop(user_action: str, resolution: str = "720p"):
                 break
             elif user_action == 'shutdown':
                 shutdown()
-        if attempt_reconnect:
-            perform_reconnect(reconnect_img, server_address, player_name)
+        # if attempt_reconnect:
+        #     perform_reconnect(reconnect_img, server_address, player_name)
         time.sleep(sleep_interval)
 
 

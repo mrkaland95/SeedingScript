@@ -7,11 +7,23 @@ import sys
 import time
 import a2s
 import psutil
-from typing import Union
+
 
 
 # This is intended for Flax' personal use, experimental script to join the server on my secondary devices if the server dips below a certain threshold
 # And within a specified timeframe.
+# Resources
+
+# https://www.geeksforgeeks.org/ssl-certificate-verification-python-requests/
+# https://stackoverflow.com/questions/1087227/validate-ssl-certificates-with-python
+#
+
+def check_if_python_script_running(script_name: str):
+    for proc in psutil.process_iter():
+        if 'python' in proc.name():
+            if len(proc.cmdline()) > 1 and script_name.lower() in proc.cmdline()[1].lower():
+                return proc.pid
+    return None
 
 
 class serverLevel(enum.Enum):
@@ -54,15 +66,8 @@ class SquadServer:
             return 0
 
 
-def check_if_python_script_running(script_name: str):
-    for proc in psutil.process_iter():
-        if 'python' in proc.name():
-            if len(proc.cmdline()) > 1 and script_name.lower() in proc.cmdline()[1].lower():
-                return proc
-    return None
 
-
-def kill_process(process_name: str = None, process: psutil.Process = None):
+def kill_process_by_name(process_name: str = None, process: psutil.Process = None):
     """
      Function that shuts down the game when the find_current_playercount reaches the critical threshold.
      :param process:
@@ -80,6 +85,14 @@ def kill_process(process_name: str = None, process: psutil.Process = None):
         print("Something went wrong when trying to kill the process")
 
 
+def kill_process_by_pid(pid):
+    """
+    Stops a process by it's process id(pid)
+    """
+    p = psutil.Process(pid)
+    p.terminate()
+
+
 def command(path):
     """
     * Path to the script that will be opened.
@@ -88,7 +101,6 @@ def command(path):
     """
     command_target = ['python', path, '-close']
     return command_target
-
 
 
 def start_seeding_script_clean(target: list):
@@ -100,14 +112,12 @@ def start_seeding_script_clean(target: list):
     """
 
     try:
-        kill_process('SquadGame.exe')
-        process = check_if_python_script_running('seedingscript.py')
-        # Kills the currently python_script_running seedingscript.
-        # This check needs to be here, otherwise the server process will terminate itself.
-        if process is not None:
-            print(process.cmdline())
-            kill_process(None, process)
+        kill_process_by_name('SquadGame.exe')
+        pid = check_if_python_script_running(target[1])
+        if pid is not None:
+            kill_process_by_pid(pid)
         time.sleep(5)
+
         print(f'Attempting to launch {target[1]}')
         subprocess.Popen(target)
         time.sleep(10)
@@ -117,7 +127,7 @@ def start_seeding_script_clean(target: list):
         return False
 
 
-def load_config(config_path: Union[str, os.PathLike]) -> dict:
+def load_config(config_path: str | os.DirEntry) -> dict:
     """
     Loads the settings from the config files.
     :return: Python dictionary with all the settings from the config file
@@ -174,26 +184,25 @@ def process_running(executable):
 
 
 def player_in_server(ip, query_port, player) -> bool:
-    server_players = a2s.players((ip, query_port))
+    timeout_buffer = 0
+    timeomout_limit = 5
+
+    for i in range(5):
+        try:
+            server_players = a2s.players((ip, query_port))
+        except Exception as err:
+            print('Something went wrong when trying to get the list of players from the server.')
+            print(err)
+            timeout_buffer += 1
+
+
     for m_player in server_players:
         if player.lower() in m_player.name.lower():
             return True
     return False
 
 
-
-def handle_args():
-    """
-    Handles inputs from the command line.
-    :return:
-    """
-    args = sys.argv
-    for i, arg in enumerate(args):
-        if arg == '-name':
-            name = arg[i+1]
-
-
-def python_script_running(script_name: str) -> bool:
+def python_script_is_running(script_name: str) -> bool:
     """
     Determines if a specific python script is python_script_running.
     Checks all the python_script_running python processes and checks checks if the script name is found in it.
@@ -213,15 +222,8 @@ def init_json_config(config_path):
         'query_interval': 60,
     }
 
-
-
     with open(config_path, 'w') as f:
-        json.dump(config, f ,  indent=4)
-
-
-
-
-
+        json.dump(config, f,  indent=4)
 
 
 def main():
@@ -234,24 +236,23 @@ def main():
     LOWER_HOUR = 8
     UPPER_HOUR = 20
     QUERY_INTERVAL_SECONDS = 30
-    QUERY_INTERVAL_SECONDS = 5  # for testing, remove when done
+    # QUERY_INTERVAL_SECONDS = 5  # for testing, remove when done
     PLAYER = 'flaxelaxen'
 
-    player_threshold = 85
-
+    player_join_threshold = 85
 
     # Creates the server objects
     theCage = SquadServer('TheCage', 'TheCage_SeedingScript.py', CONFIG_PATH_CAGE)
-    tacTrig = SquadServer('TacticalTriggernometry', 'SeedingScript_TacticalTriggernometry.py', CONFIG_PATH_TRIG)
+    tacTrig = SquadServer('TacticalTriggernometry', 'SeedingScriptMain.py', CONFIG_PATH_TRIG)
 
-    prty_to_srvr_map = {
+    priority_to_server_map = {
         1: theCage,
         2: tacTrig,
     }
 
 
     timeout = 0
-    timeout_limit = 5
+    timeout_limit = 240 // QUERY_INTERVAL_SECONDS
 
 
 
@@ -266,33 +267,38 @@ def main():
         #     continue
 
 
-        prty_lvl = 1  # Lower number is higher priority.
-        for m_srv in prty_to_srvr_map:
-            server = prty_to_srvr_map[m_srv]
+        priority_level = 1  # Lower number is higher priority.
+        for m_srv in priority_to_server_map:
+            server = priority_to_server_map[m_srv]
             # If the server does not need seeding, then increment the priority
-            if server.player_count() >= player_threshold:
-                prty_lvl += 1
+            if server.player_count() >= player_join_threshold:
+                if priority_level < len(priority_to_server_map) + 1:
+                    priority_level += 1
+                else:
+                    time.sleep(QUERY_INTERVAL_SECONDS)
+                    continue
 
-        if prty_lvl > len(prty_to_srvr_map) + 1:
-            continue
 
-        server = prty_to_srvr_map[prty_lvl]
+        server = priority_to_server_map[priority_level]
 
         if not player_in_server(server.address, server.port, PLAYER):
-            print(f'{PLAYER.capitalize()} is not in the {server.name}')
-            if not python_script_running(server.script_path) or not process_running('SquadGame.exe'):
+            print(f'{PLAYER.capitalize()} is not in the server: {server.name}')
+            if not python_script_is_running(server.script_path) or not process_running('SquadGame.exe'):
                 print(f'Attempting to connect to {server.name}')
                 start_seeding_script_clean(['python', server.script_path, '-close'])
+                time.sleep(60)
             else:
                 timeout += 1
-            # Counts up a buffer if the player is not found in
-            if timeout > timeout_limit:
+            # Counts up a buffer if the player is not found in the server
+            if timeout >= timeout_limit:
                 start_seeding_script_clean(['python', server.script_path, '-close'])
                 timeout = 0
+                time.sleep(60)
         else:
             print(f'{PLAYER.capitalize()} is in the server: {server.name}')
             timeout = 0
         time.sleep(QUERY_INTERVAL_SECONDS)
+
 
 
 if __name__ == '__main__':
