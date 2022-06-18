@@ -240,7 +240,7 @@ def settings_window():
         if event in ('Exit', sg.WIN_CLOSED):
             break
 
-        if program_shutdown:
+        if PROGRAM_SHUTDOWN:
             break
 
         for valid_event in valid_events:
@@ -324,7 +324,7 @@ def main_window():
         event, values = window.read(timeout=150)
 
         if event in ('Exit', sg.WIN_CLOSED):
-            global program_shutdown
+            global PROGRAM_SHUTDOWN
             program_shutdown = True
             break
 
@@ -405,7 +405,7 @@ def user_action_window():
         if event in ('Exit', sg.WIN_CLOSED):
             break
 
-        elif program_shutdown:
+        elif PROGRAM_SHUTDOWN:
             break
 
         elif not seeding_process:
@@ -625,7 +625,7 @@ def init_game_launch():
 
     :return:
     """
-    global game_started_by_script
+    global GAME_STARTED_BY_SCRIPT
 
     delay_from_game_launch = 60
     config = load_config(CONFIG_SETTINGS_FILE)
@@ -699,7 +699,7 @@ def launch_game(game_launcher, game_url):
     Starts Squad by telling steam to start it. Better solution than straight up starting the squad launcher
     :return:
     """
-    global game_started_by_script
+    global GAME_STARTED_BY_SCRIPT
     try:
         subprocess.run(f'start {game_url}', shell=True)
         game_started_by_script = True
@@ -1211,7 +1211,7 @@ def cmdline_argument_handler() -> None or str:
 
         elif ('-close' and '-shutdown') in args:
             print("")
-            global program_shutdown
+            global PROGRAM_SHUTDOWN
             program_shutdown = True
             sys.exit('Use only either -close or -shutdown, not both at once')
 
@@ -1584,7 +1584,7 @@ if __name__ == '__main__':
     seeding_script_version = 3.0
     # Just initializing some parameters, that will be used and checked later.
     pyautogui.FAILSAFE = False
-    game_started_by_script = False
-    program_shutdown = False
+    GAME_STARTED_BY_SCRIPT = False
+    PROGRAM_SHUTDOWN = False
     # verbose = True
     main()
