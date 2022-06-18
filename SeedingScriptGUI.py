@@ -85,138 +85,152 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
     updating the script's config file is handled.
     :return:
     """
-    # Base folder for where programs are generally installed. Makes it easy to find the correct folder.
-    programfiles_32 = os.environ["ProgramFiles(x86)"]
 
+    # Base folder for where programs are generally installed. Makes it easy to find the correct folder.
     # Reloads the parameters from the config file.
-    config = cnfg.load_config_JSON(app.SCRIPT_CONFIG_SETTINGS_FILE)
+    cfg = cnfg.BasicConfigFile(app.SCRIPT_CONFIG_SETTINGS_FILE)
+    config_baseline = deepcopy(cfg)
     # Creates a copy of the original config to see if any changes has been made
-    config_baseline = deepcopy(config)
-    player_threshold = config['player_threshold']['value']
-    server_ip = config['server_address']['value']
-    query_port = config['query_port']['value']
-    sleep_interval = config['sleep_interval']['value']
-    random_thresh_enabled = config['random_player_thresh']['value']
-    random_thresh_lower = config['random_seeding_thresh_lower']['value']
-    random_thresh_upper = config['random_seeding_thresh_upper']['value']
-    lightweight_seeding_settings = config['lightweight_seeding_settings_on']['value']
-    join_server_automatically = config['join_server_automatically']['value']
-    game_start_to_autojoin_delay = config['game_start_to_autojoin_delay']['value']
-    server_handle_to_autojoin = config['server_handle_to_autojoin']['value']
-    close_script_if_game_closed = config['close_script_if_closed_game']['value']
-    attempt_autojoin_if_ingame = config['attempt_autojoin_if_ingame']['value']
-    attempts_to_autojoin = config['attempts_to_auto_join_server']['value']
-    game_executable = config['game_executable']['value']
-    squad_install_path = config['squad_install']['value']
-    game_config_path = config['game_config_path']['value']
-    game_url_handle = config['game_url']['value']
-    player_name = config['player_name']['value']
-    attempt_reconnect = config['attempt_reconnect']['value']
+    # player_threshold = config['player_threshold']['value']
+    # server_ip = config['server_address']['value']
+    # query_port = config['query_port']['value']
+    # sleep_interval = config['sleep_interval']['value']
+    # random_thresh_enabled = config['random_player_thresh']['value']
+    # random_thresh_lower = config['random_seeding_thresh_lower']['value']
+    # random_thresh_upper = config['random_seeding_thresh_upper']['value']
+    # lightweight_seeding_settings = config['lightweight_seeding_settings_on']['value']
+    # join_server_automatically = config['join_server_automatically']['value']
+    # game_start_to_autojoin_delay = config['game_start_to_autojoin_delay']['value']
+    # server_handle_to_autojoin = config['server_handle_to_autojoin']['value']
+    # close_script_if_game_closed = config['close_script_if_closed_game']['value']
+    # attempt_autojoin_if_ingame = config['attempt_autojoin_if_ingame']['value']
+    # attempts_to_autojoin = config['attempts_to_auto_join_server']['value']
+    # game_executable = config['game_executable']['value']
+    # squad_install_path = config['squad_install']['value']
+    # game_config_path = config['game_config_path']['value']
+    # game_url_handle = config['game_url']['value']
+    # player_name = config['player_name']['value']
+    # attempt_reconnect = config['attempt_reconnect']['value']
 
     # so the value can be update in the slider without affecting the global variable
-    #lower_thresh_internal = random_thresh_lower
+    # lower_thresh_internal = random_thresh_lower
+    server_ip_key = '-SERVER_IP-'
 
     sg.theme(window_theme)
     sg.SystemTray(tooltip='SeedingScript')
 
     # Defining the left side of GUI, contains boolean settings and some other fields.
     left_col = sg.Column([
-    [sg.Frame('', layout=[
-        [sg.Text('ServerClient IP/Domain', font=('Helvetica', 14)), sg.Text('Player Threshold', font=('Helvetica', 14), pad=(120, 0))],
-        [sg.InputText(size=(18, 20), key='-SERVER_IP-', default_text=server_ip, enable_events=True),
-         sg.InputText(size=(5, 10), key='-PLAYER_THRESHOLD-', default_text=player_threshold, enable_events=True, pad=(55, 0))],
+        [sg.Frame('', layout=[
+            [sg.Text('ServerClient IP/Domain', font=('Helvetica', 14)),
+             sg.Text('Player Threshold', font=('Helvetica', 14), pad=(120, 0))],
+            [sg.InputText(size=(18, 20), key=server_ip_key, default_text=cfg.server_ip, enable_events=True),
+             sg.InputText(size=(5, 10), key='-PLAYER_THRESHOLD-', default_text=cfg.player_threshold, enable_events=True,
+                          pad=(55, 0))],
 
-        [sg.Text('ServerClient query port', font=('Helvetica', 14))],
-        [sg.InputText(size=(18, 20), key='-QUERY_PORT-', default_text=query_port, enable_events=True)],
+            [sg.Text('ServerClient query port', font=('Helvetica', 14))],
+            [sg.InputText(size=(18, 20), key='-QUERY_PORT-', default_text=cfg.query_port, enable_events=True)],
 
-        # Inner frame for on/off settings
-        [sg.Frame('On/Off settings', layout=[
-            [sg.Checkbox('Enable automatic server joining', default=join_server_automatically,
-            key='-JOIN_SERVER_AUTOMATICALLY-', enable_events=True, tooltip=
-            'Specifies whether the script will try to automatically join the desired server or not.\n'
-            'By default this is on.', )],
+            # Inner frame for on/off settings
+            [sg.Frame('On/Off settings', layout=[
+                [sg.Checkbox('Enable automatic server joining', default=cfg.join_server_automatically_enabled,
+                             key='-JOIN_SERVER_AUTOMATICALLY-', enable_events=True, tooltip=
+                             'Specifies whether the script will try to automatically join the desired server or not.\n'
+                             'By default this is on.', )],
 
-            [sg.Checkbox('Lightweight seeding settings', default=lightweight_seeding_settings,
-            key='-LIGHTWEIGHT_SETTINGS-', enable_events=True, tooltip=
-            'This specifies whether the script will apply reduced graphical settings to the game before starting it.\n'
-            'Some examples of the settings affected are; resolution, framerate limiter, resolution scaling.')],
+                [sg.Checkbox('Lightweight seeding settings', default=cfg.lightweight_seeding_settings_enabled,
+                             key='-LIGHTWEIGHT_SETTINGS-', enable_events=True, tooltip=
+                             'This specifies whether the script will apply reduced graphical settings to the game before starting it.\n'
+                             'Some examples of the settings affected are; resolution, framerate limiter, resolution scaling.')],
 
-            [sg.Checkbox('Close seeding process if game closes/crashes', default=close_script_if_game_closed,
-            key='-CLOSE_IF_NOT_RUNNING-', enable_events=True, tooltip=
-            'Whether the script will close itself should the game be closed, after the script main_seeding_loop logic loop has started\n'
-            "Does not affect regular shutdown if that's the chosen action. ")],
+                [sg.Checkbox('Close seeding process if game closes/crashes',
+                             default=cfg.close_script_if_game_has_closed,
+                             key='-CLOSE_IF_NOT_RUNNING-', enable_events=True, tooltip=
+                             'Whether the script will close itself should the game be closed, after the script main_seeding_loop logic loop has started\n'
+                             "Does not affect regular shutdown if that's the chosen action. ")],
 
-            [sg.Checkbox('Attempt autojoin if already in the game', default=attempt_autojoin_if_ingame,
-            key='-AUTOJOIN_IF_INGAME-', enable_events=True, tooltip=
-            "Specifies whether the script will attempt to autojoin the desired server, regardless of the user already being in-game")],
+                [sg.Checkbox('Attempt autojoin if already in the game', default=cfg.attempt_autojoin_if_already_ingame,
+                             key='-AUTOJOIN_IF_INGAME-', enable_events=True, tooltip=
+                             "Specifies whether the script will attempt to autojoin the desired server, regardless of the user already being in-game")],
 
-            [sg.Checkbox('Random player threshold', default=random_thresh_enabled,
-             key='-RANDOM_SEEDING_THRESH-', enable_events=True, tooltip=
-             'To increase the spread of when players disconnect. '
-             'Chooses a random integer between the chosen lower and upper bounds.'
-             'By default on. Note that this overrides the manually set player threshold, but this is left as an option should the user'
-             'wish to use their own threshold')],
+                [sg.Checkbox('Random player threshold', default=cfg.random_player_threshold_enabled,
+                             key='-RANDOM_SEEDING_THRESH-', enable_events=True, tooltip=
+                             'To increase the spread of when players disconnect. '
+                             'Chooses a random integer between the chosen lower and upper bounds.'
+                             'By default on. Note that this overrides the manually set player threshold, but this is left as an option should the user'
+                             'wish to use their own threshold')],
 
-            [sg.Checkbox('Attempt rejoin if disconnected', default=attempt_reconnect,
-            key='-ATTEMPT_RECONNECT-', enable_events=True, tooltip=
-            'Whether the script will attempt to reconnect when the player name is not found in the server. By default off.'
-            'Do note that an accurate player name should be specified if this setting is enabled, otherwise the'
-            'script will attempt to constantly rejoin without being able to.')]
-        ])],
+                [sg.Checkbox('Attempt rejoin if disconnected', default=cfg.attempt_reconnection,
+                             key='-ATTEMPT_RECONNECT-', enable_events=True, tooltip=
+                             'Whether the script will attempt to reconnect when the player name is not found in the server. By default off.'
+                             'Do note that an accurate player name should be specified if this setting is enabled, otherwise the'
+                             'script will attempt to constantly rejoin without being able to.')]
+            ])],
 
-        [sg.Frame('Threshold of players', [
-            [sg.Text('Note: Random seeding threshold \noverrides these', font=('helvetica', 12))],
-            [sg.Slider(range=(1, 100), orientation='v', size=(5, 20), default_value=random_thresh_lower,
-                       key="-LOWER_THRESH-", enable_events=True),
-             sg.Slider(range=(random_thresh_lower, 100), orientation='v', size=(5, 20),
-                       default_value=random_thresh_upper, key='-UPPER_THRESH-', enable_events=True)]],
-                  element_justification='center'),
+            [sg.Frame('Threshold of players', [
+                [sg.Text('Note: Random seeding threshold \noverrides these', font=('helvetica', 12))],
+                [sg.Slider(range=(1, 100), orientation='v', size=(5, 20),
+                           default_value=cfg.random_player_threshold_lower,
+                           key="-LOWER_THRESH-", enable_events=True),
+                 sg.Slider(range=(cfg.random_player_threshold_lower, 100), orientation='v', size=(5, 20),
+                           default_value=cfg.random_player_threshold_upper, key='-UPPER_THRESH-', enable_events=True)]],
+                      element_justification='center'),
 
-         # Right bottom frame on the left main_seeding_loop frame.
-            sg.Frame("", layout=[
-            [sg.Text('Number of attempts to autojoin')],
-            [sg.InputText(key='-ATTEMPTS_TO_AUTOJOIN-', size=(5, 5), default_text=attempts_to_autojoin, enable_events=True,
-                          tooltip='How many attempts the script will attempt to autojoin the server before giving up')],
+             # Right bottom frame on the left main_seeding_loop frame.
+             sg.Frame("", layout=[
+                 [sg.Text('Number of attempts to autojoin')],
+                 [sg.InputText(key='-ATTEMPTS_TO_AUTOJOIN-', size=(5, 5), default_text=cfg.attempts_to_autojoin_max,
+                               enable_events=True,
+                               tooltip='How many attempts the script will attempt to autojoin the server before giving up')],
 
-            [sg.Text('ServerClient query and sleep interval')],
-            [sg.InputText(key='-SLEEP_INTERVAL-', size=(5, 5), default_text=sleep_interval, enable_events=True, tooltip=
-            'How often the program will try and query the server for player numbers, defined in sconds. Default is 60 seconds, but generally shouldnt need to be touched')],
+                 [sg.Text('ServerClient query and sleep interval')],
+                 [sg.InputText(key='-SLEEP_INTERVAL-', size=(5, 5), default_text=cfg.sleep_interval_seconds,
+                               enable_events=True,
+                               tooltip=
+                               'How often the program will try and query the server for player numbers, defined in sconds. Default is 60 seconds, but generally shouldnt need to be touched')],
 
-            [sg.Text('Delay from seeding process start to autojoin attempt')],
-            [sg.InputText(key='-GAME_START_DELAY-', size=(5, 5), default_text=game_start_to_autojoin_delay, tooltip=
-            'The amount of time from when the game launched, to when the script will attempt to autojoin the specified server', enable_events=True)]
-        ])]])]])
-
+                 [sg.Text('Delay from seeding process start to autojoin attempt')],
+                 [sg.InputText(key='-GAME_START_DELAY-', size=(5, 5),
+                               default_text=cfg.game_launch_to_autojoin_delay_seconds,
+                               tooltip=
+                               'The amount of time from when the game launched, to when the script will attempt to autojoin the specified server',
+                               enable_events=True)]
+             ])]])]])
 
     # Defining the right side of the settings window. Mainly contains input fields for paths
     right_col = sg.Column([
-    [sg.Frame('', size=(400, 900), layout=[
-        [sg.Text('Squad game executable', font=('Helvetica', 14))],
-        [sg.InputText(size=(35, 20), key='-GAME_EXECUTABLE-',
-                      default_text=game_executable, enable_events=True)],
+        [sg.Frame('', size=(400, 900), layout=[
+            [sg.Text('Squad game executable', font=('Helvetica', 14))],
+            [sg.InputText(size=(35, 20), key='-GAME_EXECUTABLE-',
+                          default_text=cfg.game_executable, enable_events=True)],
 
-        [sg.Text("Squad's launcher path", font=('Helvetica', 14))],
-        [sg.InputText(size=(35, 20), key='-GAME_INSTALL-',
-                      default_text=squad_install_path, enable_events=True), sg.FileBrowse(initial_folder=programfiles_32)],
+            [sg.Text("Squad's launcher path", font=('Helvetica', 14))],
+            [sg.InputText(size=(35, 20), key='-GAME_INSTALL-',
+                          default_text=cfg.squad_install_path, enable_events=True),
+             sg.FileBrowse(initial_folder=app.programfiles_32)],
 
-        [sg.Text("Squad's steam URL start handle", font=('Helvetica', 14))],
-        [sg.InputText(size=(35, 20), key='-GAME_URL_HANDLE-',
-                      default_text=game_url_handle, enable_events=True)],
+            [sg.Text("Squad's steam URL start handle", font=('Helvetica', 14))],
+            [sg.InputText(size=(35, 20), key='-GAME_URL_HANDLE-',
+                          default_text=cfg.steam_url_handle, enable_events=True)],
 
-        [sg.Text("Path to Squad's game config files", font=('helvetica', 14))],
-        [sg.InputText(size=(35, 20), key='-GAME_CONFIG_PATH-',
-                      default_text=game_config_path, enable_events=True), sg.FolderBrowse(initial_folder=app.LOCAL_APPDATA)],
+            [sg.Text("Path to Squad's game config files", font=('helvetica', 14))],
+            [sg.InputText(size=(35, 20), key='-GAME_CONFIG_PATH-',
+                          default_text=app.game_config_path, enable_events=True),
+             sg.FolderBrowse(initial_folder=app.LOCAL_APPDATA)],
 
-        [sg.Text('ServerClient name to autojoin', font=('helvetica', 14))],
-        [sg.InputText(size=(35, 20), key='-SERVER_HANDLE-', default_text=server_handle_to_autojoin, enable_events=True)],
+            [sg.Text('ServerClient name to autojoin', font=('helvetica', 14))],
+            [sg.InputText(size=(35, 20), key='-SERVER_HANDLE-', default_text=cfg.server_handle_to_autojoin,
+                          enable_events=True)],
 
-        [sg.Text('Player name', font=('helvetica', 14), tooltip="The player's in game name. Not case sensitive, and tags are not required")],
-        [sg.InputText(size=(35, 20), key='-PLAYER_NAME-', default_text=player_name, enable_events=True,
-         tooltip="The player's in game name. Not case sensitive, and tags are not required")]
-    # This is the delimiter for the frame.
-    ])]
-    # This is the delimiter for the column
+            [sg.Text('Player name', font=('helvetica', 14),
+                     tooltip="The player's in game name. Not case sensitive, and tags are not required")],
+            [sg.InputText(size=(35, 20), key='-PLAYER_NAME-', default_text=cfg.player_name, enable_events=True,
+                          tooltip="The player's in game name. Not case sensitive, and tags are not required")]
+            # This is the delimiter for the frame.
+        ])]
+        # This is the delimiter for the column
     ])
+
 
     # Full layout of the various elements
     layout =\

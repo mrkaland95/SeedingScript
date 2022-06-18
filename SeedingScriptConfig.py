@@ -1,5 +1,6 @@
 import configparser
 import json
+import logging
 import os
 import shutil
 import SeedingScriptMain as app
@@ -8,6 +9,11 @@ from pathlib import Path
 
 VALUE_KEY = 'value'
 DESCRIPTION_KEY = 'description'
+
+
+def init_config_folder(config_folder_path: str | os.PathLike):
+    if not os.path.exists(config_folder_path):
+        os.mkdir(config_folder_path)
 
 
 def load_config_JSON(config_file_path: str | os.PathLike) -> dict:
@@ -186,6 +192,43 @@ def init_JSON_config(config_file: str | os.PathLike):
 #     game_config_file = f'{game_config_path}\\GameUserSettings.ini'
 #     return
 
+def config_check_integrity(config: dict):
+    """
+    Checks the integrity of the config file for integrity purposes.
+    :param config:
+    :return:
+    """
+    join_server_automatically = config['join_server_automatically']['value']
+    attempt_autojoin_if_ingame = config['attempt_autojoin_if_ingame']['value']
+    server_ip = config['server_address']['value']
+    query_port = config['query_port']['value']
+    player_threshold = config['player_threshold']['value']
+    close_script_if_game_closed = config["close_script_if_closed_game"]['value']
+    game_executable = config['game_executable']['value']
+    lightweight_seeding_settings_on = config["lightweight_seeding_settings_on"]['value']
+    sleep_interval = config['sleep_interval']['value']
+    random_seeding_thresh_upper = config["random_seeding_thresh_upper"]['value']
+    random_seeding_thresh_lower = config["random_seeding_thresh_lower"]['value']
+    random_player_thresh = config["random_player_thresh"]['value']
+    player_name = config["player_name"]['value']
+    # attempt_reconnect = config['attempt_reconnect']['value']
+
+    assert isinstance(join_server_automatically, bool)
+    assert isinstance(attempt_autojoin_if_ingame, bool)
+    assert isinstance(query_port, int)
+    assert isinstance(player_threshold, int)
+    assert isinstance(close_script_if_game_closed, bool)
+    assert isinstance(lightweight_seeding_settings_on, bool)
+    assert isinstance(sleep_interval, int)
+    assert isinstance(random_seeding_thresh_upper, int)
+    assert isinstance(random_seeding_thresh_lower, int)
+    assert isinstance(random_player_thresh, bool)
+
+
+
+
+
+
 
 def init_games_seeding_config(cfg: BasicConfigFile):
     """
@@ -198,53 +241,57 @@ def init_games_seeding_config(cfg: BasicConfigFile):
     # game_config_path = config["game_config_path"]["value"]
 
     lightweight_seeding_settings = cfg.lightweight_seeding_settings_enabled
-    if lightweight_seeding_settings:
-        game_original_config_path = Path(cfg.squad_game_config_path)
-        backup_path = game_original_config_path / 'Backup'
-        original_config_file = os.path.abspath(f'{game_original_config_path}\GameUserSettings.ini')
-        on_startup_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
-        seeding_settings_swap_file = os.path.abspath(f'{backup_path}\GameUserSettingsSwapFile.ini')
-        backup_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsBackupOfOriginal.ini')
+    if not lightweight_seeding_settings:
+        return
+    game_original_config_path = Path(cfg.squad_game_config_path)
+    backup_path = game_original_config_path / 'Backup'
+    original_config_file = Path(game_original_config_path) / 'GameUserSettings.ini'
+    # original_config_file = os.path.abspath(f'{game_original_config_path}\GameUserSettings.ini')
+    # on_startup_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
+    on_startup_file = Path(backup_path) / 'GameUserSettingsLastUsed.ini'
+    seeding_settings_swap_file = Path(backup_path) / 'GameUserSettingsSwapFile.ini'
+    backup_config_file = Path(backup_path) / 'GameUserSettingsBackupOfOriginal.ini'
 
-        if not os.path.exists(backup_path):
-            try:
-                os.mkdir(backup_path)
-                print("Backup directory successfully initialized")
-            except FileExistsError:
-                return
-            shutil.copyfile(original_config_file, seeding_settings_swap_file)
+    if not os.path.exists(backup_path):
+        try:
+            backup_path.mkdir()
+            # os.mkdir(backup_path)
+            logging.info("Backup directory successfully initialized")
+        except FileExistsError:
+            logging.debug(f'The backup directory already exists.')
+            return
+        logging.debug(f'Copying file')
+        shutil.copyfile(original_config_file, seeding_settings_swap_file)
 
-        if not os.path.exists(on_startup_file):
-            try:
-                shutil.copyfile(original_config_file, on_startup_file)
-            except FileExistsError:
-                return
-
-        # if not os.path.exists
-
-        # To allow keys to still have multiple values. Otherwise the game's config file will break and not work.
-        seedingparser = configparser.ConfigParser(dict_type=MultiOrderedDict, strict=False)
-        seedingparser.optionxform = str
-        seedingparser.read(seeding_settings_swap_file)
-        mainsection = seedingparser['/Script/Squad.SQGameUserSettings']
-        # All 4 sections below are required to change resolution before the game starts.
-        mainsection['ResolutionSizeX'] = "1280"
-        mainsection['ResolutionSizeY'] = "720"
-        mainsection['LastUserConfirmedResolutionSizeX'] = "1280"
-        mainsection['LastUserConfirmedResolutionSizeY'] = "720"
-        mainsection['LastUserConfirmedDesiredScreenWidth'] = '1280'
-        mainsection['LastUserConfirmedDesiredScreenHeight'] = '720'
-        mainsection['FullscreenMode'] = "2"  # Windowed mode
-        mainsection['LastConfirmedFullscreenMode'] = "2"  # Windowed mode
-        mainsection['MenuFrameRateLimit'] = '50.000000'
-        mainsection['FrameRateLimit'] = "20.000000"
-        mainsection['MasterVolume'] = "0.00000"
-        mainsection['ScreenPercentage'] = "75"  # The screen resolution scaling in percent.
-        with open(seeding_settings_swap_file, "w") as writefile:
-            seedingparser.write(writefile)
-
-        if not os.path.exists(on_startup_file):
+    if not os.path.exists(on_startup_file):
+        try:
             shutil.copyfile(original_config_file, on_startup_file)
-        if not os.path.exists(backup_config_file):
-            shutil.copyfile(original_config_file, backup_config_file)
+        except FileExistsError:
+            return
+
+    # To allow keys to still have multiple values. Otherwise the game's config file will break and not work.
+    seedingparser = configparser.ConfigParser(dict_type=MultiOrderedDict, strict=False)
+    seedingparser.optionxform = str
+    seedingparser.read(seeding_settings_swap_file)
+    mainsection = seedingparser['/Script/Squad.SQGameUserSettings']
+    # All 4 sections below are required to change resolution before the game starts.
+    mainsection['ResolutionSizeX'] = "1280"
+    mainsection['ResolutionSizeY'] = "720"
+    mainsection['LastUserConfirmedResolutionSizeX'] = "1280"
+    mainsection['LastUserConfirmedResolutionSizeY'] = "720"
+    mainsection['LastUserConfirmedDesiredScreenWidth'] = '1280'
+    mainsection['LastUserConfirmedDesiredScreenHeight'] = '720'
+    mainsection['FullscreenMode'] = "2"  # Windowed mode
+    mainsection['LastConfirmedFullscreenMode'] = "2"  # Windowed mode
+    mainsection['MenuFrameRateLimit'] = '50.000000'
+    mainsection['FrameRateLimit'] = "20.000000"
+    mainsection['MasterVolume'] = "0.00000"
+    mainsection['ScreenPercentage'] = "75"  # The screen resolution scaling in percent.
+    with open(seeding_settings_swap_file, "w") as writefile:
+        seedingparser.write(writefile)
+
+    if not os.path.exists(on_startup_file):
+        shutil.copyfile(original_config_file, on_startup_file)
+    if not os.path.exists(backup_config_file):
+        shutil.copyfile(original_config_file, backup_config_file)
     return
