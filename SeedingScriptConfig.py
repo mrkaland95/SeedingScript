@@ -11,18 +11,29 @@ VALUE_KEY = 'value'
 DESCRIPTION_KEY = 'description'
 
 
-def init_config_folder(config_folder_path: str | os.PathLike):
-    if not os.path.exists(config_folder_path):
-        os.mkdir(config_folder_path)
+def initialize_folder(folder_path: str | os.PathLike):
+    """
+    Initializes a folder if it does not exist.
+    """
+    if not os.path.exists(folder_path):
+        os.mkdir(folder_path)
 
 
-def load_config_JSON(config_file_path: str | os.PathLike) -> dict:
+def save_json_config(config: dict, config_file_path: str | os.PathLike) -> None:
+    """
+    Saves a python dictonary to a json file.
+    """
+    with open(config_file_path, 'w') as f:
+        json.dump(config, f, indent=4)
+    return
+
+
+def load_json_config(config_file_path: str | os.PathLike) -> dict:
     """
     Loads the settings from the config files.
     :return: Python dictionary with all the settings from the config file
     """
-    script_config_path = config_file_path
-    with open(script_config_path, 'r') as f:
+    with open(config_file_path, 'r') as f:
         config_file_json = json.load(f)
     return config_file_json
 
@@ -42,7 +53,8 @@ class MultiOrderedDict(OrderedDict):
 
 class BasicConfigFile:
     def __init__(self, config_path):
-        self.config = load_config_JSON(config_path)
+        self.config_path = config_path
+        self.config = load_json_config(config_path)
         self.player_name = self.config[app.PLAYER_NAME_KEY][VALUE_KEY]
         self.player_threshold = self.config[app.PLAYER_THRESHOLD_KEY][VALUE_KEY]
         self.attempt_reconnection = self.config[app.ATTEMPT_RECONNECTION_KEY][VALUE_KEY]
@@ -65,6 +77,41 @@ class BasicConfigFile:
         self.steam_url_handle = self.config[app.SQUAD_STEAM_URL_HANDLE_KEY][VALUE_KEY]
         self.default_user_action = self.config[app.DEFAULT_USERACTION_KEY][VALUE_KEY]
         self.lightweight_seeding_settings_applied = self.config[app.LIGHTWEIGHT_SETTINGS_APPLIED_KEY][VALUE_KEY]
+        return
+
+    def save_settings(self):
+        """
+        Takes all the settings stored internally in the object, puts them in the config dictionary,
+        which is then saved as a JSON file.
+        """
+        self.config[app.PLAYER_NAME_KEY][VALUE_KEY] = self.player_name
+        self.config[app.PLAYER_THRESHOLD_KEY][VALUE_KEY] = self.player_threshold
+        self.config[app.ATTEMPT_RECONNECTION_KEY][VALUE_KEY] = self.attempt_reconnection
+        self.config[app.SERVER_IP_KEY][VALUE_KEY] = self.server_ip
+        self.config[app.QUERY_PORT_KEY][VALUE_KEY] = self.query_port
+        self.config[app.SLEEP_INTERVAL_SECONDS_KEY][VALUE_KEY] = self.sleep_interval_seconds
+        self.config[app.RANDOM_PLAYER_THRESHOLD_ENABLED_KEY][VALUE_KEY] = self.random_player_threshold_enabled
+        self.config[app.RANDOM_PLAYER_THRESHOLD_LOWER_KEY][VALUE_KEY] = self.random_player_threshold_lower
+        self.config[app.RANDOM_PLAYER_THRESHOLD_UPPER_KEY][VALUE_KEY] = self.random_player_threshold_upper
+        self.config[app.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED_KEY][VALUE_KEY] = self.lightweight_seeding_settings_enabled
+        self.config[app.JOIN_SERVER_AUTOMATICALLY_ENABLED_KEY][VALUE_KEY] = self.join_server_automatically_enabled
+        self.config[app.GAME_LAUNCH_TO_AUTOJOIN_DELAY_KEY][VALUE_KEY] = self.game_launch_to_autojoin_delay_seconds
+        self.config[app.SERVER_HANDLE_TO_AUTOJOIN_KEY][VALUE_KEY] = self.server_handle_to_autojoin
+        self.config[app.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED_KEY][VALUE_KEY] = self.close_script_if_game_has_closed
+        self.config[app.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME_KEY][VALUE_KEY] = self.attempt_autojoin_if_already_ingame
+        self.config[app.ATTEMPTS_TO_AUTOJOIN_SERVER_KEY][VALUE_KEY] = self.attempts_to_autojoin_max
+        self.config[app.GAME_EXECUTABLE_KEY][VALUE_KEY] = self.game_executable
+        self.config[app.SQUAD_INSTALL_PATH_KEY][VALUE_KEY] = self.squad_install_path
+        self.config[app.SQUAD_CONFIG_FILES_PATH_KEY][VALUE_KEY] = self.squad_game_config_path
+        self.config[app.SQUAD_STEAM_URL_HANDLE_KEY][VALUE_KEY] = self.steam_url_handle
+        self.config[app.DEFAULT_USERACTION_KEY][VALUE_KEY] = self.default_user_action
+        self.config[app.LIGHTWEIGHT_SETTINGS_APPLIED_KEY][VALUE_KEY] = self.lightweight_seeding_settings_applied
+        save_json_config(self.config, self.config_path)
+        return
+
+
+
+
 
 
 
@@ -225,12 +272,7 @@ def config_check_integrity(config: dict):
     assert isinstance(random_player_thresh, bool)
 
 
-
-
-
-
-
-def init_games_seeding_config(cfg: BasicConfigFile):
+def init_games_seeding_config(config: BasicConfigFile):
     """
     Initializes the gameconfig files for setting applying seeding settings, if applicable.
     :param:
@@ -240,10 +282,10 @@ def init_games_seeding_config(cfg: BasicConfigFile):
     # lightweight_seeding_settings = config["lightweight_seeding_settings_on"]['value']
     # game_config_path = config["game_config_path"]["value"]
 
-    lightweight_seeding_settings = cfg.lightweight_seeding_settings_enabled
+    lightweight_seeding_settings = config.lightweight_seeding_settings_enabled
     if not lightweight_seeding_settings:
         return
-    game_original_config_path = Path(cfg.squad_game_config_path)
+    game_original_config_path = Path(config.squad_game_config_path)
     backup_path = game_original_config_path / 'Backup'
     original_config_file = Path(game_original_config_path) / 'GameUserSettings.ini'
     # original_config_file = os.path.abspath(f'{game_original_config_path}\GameUserSettings.ini')
