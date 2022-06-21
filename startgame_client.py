@@ -7,6 +7,9 @@ from sys import exit, argv
 from enum import Enum
 from requests import get
 
+"""
+Program desig
+"""
 
 class DeviceEnum(Enum):
     STEFFEN_LAPTOP = enum.auto()

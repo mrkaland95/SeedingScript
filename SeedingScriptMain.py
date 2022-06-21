@@ -18,7 +18,6 @@ import pythoncom
 import win32com.client
 import win32gui
 import logging
-import PySimpleGUI as sg
 import SeedingScriptGUI as gui
 import SeedingScriptConfig as cnfg
 import logging_custom
@@ -42,8 +41,8 @@ SCRIPT_CONFIG_SETTINGS_FOLDER = Path(LOCAL_APPDATA) / 'SeedingScript'
 SCRIPT_CONFIG_SETTINGS_FILE = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / 'seedingconfig.json'
 GAME_CONFIG_PATH = Path(LOCAL_APPDATA) / 'SquadGame/Saved/Config/WindowsNoEditor'
 ICONS_FOLDER_NAME = 'icons'
-ICONS_PATH = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / ICONS_FOLDER_NAME
-
+ICONS_PATH_PERMANENT = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / ICONS_FOLDER_NAME
+ICONS_PATH_LOCAL = Path(os.path.dirname(os.path.realpath(__file__))) / ICONS_FOLDER_NAME
 
 programfiles_32 = os.environ["ProgramFiles(x86)"]
 programfiles_64 = os.environ['ProgramW6432']
@@ -124,20 +123,22 @@ class MultiOrderedDict(OrderedDict):
             super().__setitem__(key, value)
 
 
-def init_icons_folder(config_folder: str | os.PathLike):
+def init_icons_folder(icons_path_local: str | os.PathLike = ICONS_PATH_LOCAL, icons_path_permanent:str | os.PathLike = ICONS_PATH_PERMANENT):
+    # TODO Find a better way to handle this.
     """
     I suppose the purpose of this function is to copy the icons from the local folder, i.e
     the folder the script is running from, to a config folder.
     """
-    dir_path = os.path.dirname(os.path.realpath(__file__))  # current path of the script
-    icon_folder_name = 'icons'
-    icon_folder_local = os.path.join(f'{dir_path}', icon_folder_name)
-    icon_folder_dst = os.path.join(f'{config_folder}', icon_folder_name)
-    if not os.path.exists(icon_folder_dst):
+      # current path of the script
+    # icon_folder_local = os.path.join(f'{dir_path}', icon_folder_name)
+    # icon_folder_dst = os.path.join(f'{config_folder}', icon_folder_name)
+
+
+    if not os.path.exists(icons_path_permanent):
         try:
-            shutil.copytree(src=icon_folder_local, dst=icon_folder_dst)
+            shutil.copytree(src=ICONS_PATH_LOCAL, dst=icons_path_permanent)
         except Exception as err:
-            print(err, end='\n')
+            logging.warning(f'{err}\n')
             return
 
 
@@ -160,14 +161,18 @@ def init_game_launch(config: cnfg.BasicConfigFile = None):
     game_url = config.steam_url_handle
     squad_install = config.squad_install_path
 
-    if not process_running(game_executable):
-        GAME_STARTED_BY_SCRIPT = True
-        if lightweight_seeding_settings:
-            apply_seeding_settings()
-            threading.Thread(target=restore_last_used_settings, kwargs={'restore_delay': True})
-        launch_game(squad_install, game_url)
-        time.sleep(delay_from_game_launch)
+    if process_running(game_executable):  # is game is already running? Then exit the function.
+        return
 
+
+    if lightweight_seeding_settings:
+        apply_seeding_settings()
+        t = threading.Thread(target=restore_last_used_settings, name='Restore Settings Thread', kwargs={'restore_delay': True})
+        t.start()
+    launch_game(squad_install, game_url)
+    GAME_STARTED_BY_SCRIPT = True
+    time.sleep(delay_from_game_launch)
+    return
 
 def apply_seeding_settings(config: cnfg.BasicConfigFile = None, compare_config: bool = True):
     """
@@ -196,19 +201,15 @@ def apply_seeding_settings(config: cnfg.BasicConfigFile = None, compare_config: 
     if cmp_swap or lightweight_settings_applied:
         return
 
-    elif not lightweight_settings_applied or not cmp_swap:
-        # Copies the active config file to backup.
-        shutil.copyfile(current_config, backup_config_file)
-        # Copies the active config file to secondary backup, in the seedingscript folder.
-        shutil.copyfile(current_config, backup_in_script_config)
-        # Copies the lightweight config settings to active config file.
-        shutil.copyfile(swap_config_file, current_config)
-        config.lightweight_seeding_settings_applied = True
-        with open(SCRIPT_CONFIG_SETTINGS_FILE, 'w') as f:
-            json.dump(config, f, indent=4)
-        print("Lightweight seeding settings applied")
-
-        # if lightweight_settings_applied is False:
+    # Copies the active config file to backup.
+    shutil.copyfile(current_config, backup_config_file)
+    # Copies the active config file to secondary backup, in the seedingscript folder.
+    shutil.copyfile(current_config, backup_in_script_config)
+    # Copies the lightweight config settings to active config file.
+    shutil.copyfile(swap_config_file, current_config)
+    config.lightweight_seeding_settings_applied = True
+    config.save_settings()
+    logging.info("Lightweight seeding settings applied")
 
 
 def launch_game(game_launcher, game_url):
@@ -792,14 +793,14 @@ def cmdline_argument_handler() -> None or str:
 def icon_handler(resolution: str = '720p'):
     # TODO this should be reworked, possibly deprecated with proper OpenOCR implementation
     images_icons_dict = {
-        'server_in_browser': f'{ICONS_PATH}\\{resolution}/Server_name.png',
-        'server_browser_button': f'{ICONS_PATH}\\{resolution}\\Server_browser_button.png',
-        'search_bar': f'{ICONS_PATH}\\{resolution}\\Search_bar.png',
-        'in_server_browser': f'{ICONS_PATH}\\{resolution}\\In_server_browser.png',
-        'in_server_browser_backup': f'{ICONS_PATH}\\{resolution}\\In_server_browser.png',
-        'join_modded_server': f'{ICONS_PATH}\\{resolution}\\Modded_server.png',
+        'server_in_browser': f'{ICONS_PATH_PERMANENT}\\{resolution}/Server_name.png',
+        'server_browser_button': f'{ICONS_PATH_PERMANENT}\\{resolution}\\Server_browser_button.png',
+        'search_bar': f'{ICONS_PATH_PERMANENT}\\{resolution}\\Search_bar.png',
+        'in_server_browser': f'{ICONS_PATH_PERMANENT}\\{resolution}\\In_server_browser.png',
+        'in_server_browser_backup': f'{ICONS_PATH_PERMANENT}\\{resolution}\\In_server_browser.png',
+        'join_modded_server': f'{ICONS_PATH_PERMANENT}\\{resolution}\\Modded_server.png',
         # 'squad_task_bar_icon': f'{ICONS_PATH}\\{resolution}\\Squad_title_bar.png',
-        'reconnect_img_path': f'{ICONS_PATH}\\{resolution}\\reconnect_img.png'
+        'reconnect_img_path': f'{ICONS_PATH_PERMANENT}\\{resolution}\\reconnect_img.png'
     }
 
     return \
@@ -850,7 +851,7 @@ def autojoin_loop(config: cnfg.BasicConfigFile = None):
 
     force_window_to_foreground(find_squad_hwnd())
     resolution_from_folder_name = 0
-    for folder in os.scandir(ICONS_PATH):
+    for folder in os.scandir(ICONS_PATH_PERMANENT):
         if not os.path.isdir(folder):
             continue
         # The game's window size in this instance.
@@ -912,7 +913,7 @@ def remove_old_icons_folder():
     return
 
 
-def main_seeding_loop(user_action: str, config: cnfg.BasicConfigFile, resolution: str = "720p", ):
+def main_seeding_loop(user_action: str, config: cnfg.BasicConfigFile = None, resolution: str = "720p", ):
     """
     Main logic the seedingscript loop.
     :return: The desired user action: close, shutdown and hibernate
@@ -920,7 +921,7 @@ def main_seeding_loop(user_action: str, config: cnfg.BasicConfigFile, resolution
 
     script_started_game = False
     threshold_hit = False
-    if not config:
+    if not config:  # Reloads and creates a new config object if one hasnt been passed.
         config = cnfg.BasicConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
     if config.random_player_threshold_enabled:
@@ -971,11 +972,11 @@ def main_seeding_loop(user_action: str, config: cnfg.BasicConfigFile, resolution
             if not process_running(config.game_executable):
                 if script_started_game:
                     restore_last_used_settings()
-                print("Game not running, exiting seeding process")
+                logging.info("Game not running, exiting seeding process")
                 sys.exit()
 
         current_player_count = find_current_playercount(server_address)
-        print(f" {current_hour_min}  -- There are currently {current_player_count} players on the server\n")
+        logging.info(f" {current_hour_min}  -- There are currently {current_player_count} players on the server\n")
 
         if current_player_count >= player_threshold:
             threshold_hit = True
@@ -1040,8 +1041,4 @@ def main():
 
 
 if __name__ == '__main__':
-
-    # game_config_path = 'C:/Users/Steffen/AppData/Local/SquadGame/Saved/Config/WindowsNoEditor/GameUserSettings.ini'
-    # resolution = find_resolution(game_config_path)
-
     main()

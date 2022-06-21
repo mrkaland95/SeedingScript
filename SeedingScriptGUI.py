@@ -121,7 +121,7 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
     # Defining the left side of GUI, contains boolean settings and some other fields.
     left_col = sg.Column([
         [sg.Frame('', layout=[
-            [sg.Text('ServerClient IP/Domain', font=('Helvetica', 14)),
+            [sg.Text("Server's IP/Domain", font=('Helvetica', 14)),
 
              sg.Text('Player Threshold', font=('Helvetica', 14), pad=(120, 0))],
 
@@ -139,7 +139,7 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
                 [sg.Checkbox('Enable automatic server joining', default=config.join_server_automatically_enabled,
                              key=join_server_automatically_key, enable_events=True, tooltip=
                              'Specifies whether the script will try to automatically join the desired server or not.\n'
-                             'By default this is on.', )],
+                             'By default this is on.')],
 
                 [sg.Checkbox('Lightweight seeding settings', default=config.lightweight_seeding_settings_enabled,
                              key=lightweight_seeding_settings_enabled_key, enable_events=True, tooltip=
@@ -180,7 +180,7 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
                  sg.Slider(range=(config.random_player_threshold_lower, 100), orientation='v', size=(5, 20),
                            default_value=config.random_player_threshold_upper,
                            key=upper_thresh_key, enable_events=True)]],
-                      element_justification='center'),
+                           element_justification='center'),
 
              # Right bottom frame on the left main_seeding_loop frame.
              sg.Frame("", layout=[
@@ -194,13 +194,16 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
                  [sg.InputText(key=sleep_interval_key, size=(5, 5), default_text=config.sleep_interval_seconds,
                                enable_events=True,
                                tooltip=
-                               'How often the program will try and query the server for player numbers, defined in sconds. Default is 60 seconds, but generally shouldnt need to be touched')],
+                               'How often the program will try and query the server for player numbers, defined in sconds. '
+                               'Default is 60 seconds, but generally shouldnt need to be touched')],
 
-                 [sg.Text('Delay from seeding process start to autojoin attempt')],
+                 [sg.Text('Autojoin delay in seconds')],
                  [sg.InputText(key=game_start_delay_key, size=(5, 5),
                                default_text=config.game_launch_to_autojoin_delay_seconds,
                                tooltip=
-                               'The amount of time from when the game launched, to when the script will attempt to autojoin the specified server',
+                               'The amount of time from when the game launched, '
+                               'to when the script will attempt to autojoin the specified server, '
+                               'This will ',
                                enable_events=True)]
              ])]])]])
 
@@ -225,7 +228,7 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
                           default_text=app.game_config_path, enable_events=True),
              sg.FolderBrowse(initial_folder=app.LOCAL_APPDATA)],
 
-            [sg.Text('ServerClient name to autojoin', font=('helvetica', 14))],
+            [sg.Text('Server name to autojoin', font=('helvetica', 14))],
             [sg.InputText(size=(35, 20), key=server_handle_key, default_text=config.server_handle_to_autojoin,
                           enable_events=True)],
 
@@ -272,6 +275,11 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
         '-ATTEMPT_RECONNECT-': 'attempt_reconnect'
         }
 
+    # I've decided to this to enforce the numberical fields actually being numbers
+    numerical_events = [player_threshold_key, query_port_key, sleep_interval_key, attempts_to_autojoin_counts_key,
+                        game_start_delay_key]
+
+
     # Event loop
     while True:
         event, values = window.Read(timeout=75)
@@ -282,7 +290,7 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
         elif app.PROGRAM_SHUTDOWN:
             break
 
-        if event in ('-PLAYER_THRESHOLD-', '-QUERY_PORT-', '-SLEEP_INTERVAL-', '-ATTEMPTS_TO_AUTOJOIN-', '-GAME_START_DELAY-'):
+        if event in numerical_events:
             if values[event] == "":
                 window.Element(event).Update(0)
             else:
@@ -290,19 +298,17 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
                     # Updates the window with an integer value if possible, which ensures an integer when saving.
                     values[event] = int(values[event])
                 except ValueError:
-                    window.Element(event).Update(0)
-
-
+                    window.Element(event).Update(00)
 
 
         elif event == server_ip_key:
             config.server_ip = values[event]
 
-        elif event == player_threshold_key:
-            config.player_threshold = values[event]
+        # elif event == player_threshold_key:
+        #     config.player_threshold = values[event]
 
-        elif event == query_port_key:
-            config.query_port = values[event]
+        # elif event == query_port_key:
+        #     config.query_port = values[event]
 
         elif event == join_server_automatically_key:
             config.join_server_automatically_enabled = values[event]
