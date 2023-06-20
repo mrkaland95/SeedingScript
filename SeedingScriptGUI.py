@@ -7,7 +7,7 @@ import time
 
 import PySimpleGUI as sg
 import SeedingScriptMain as app
-import SeedingScriptConfig as cnfg
+import SeedingScriptSettings as cnfg
 from copy import deepcopy
 
 

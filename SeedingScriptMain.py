@@ -19,7 +19,8 @@ import win32com.client
 import win32gui
 import logging
 import SeedingScriptGUI as gui
-import SeedingScriptConfig as cnfg
+import SeedingScriptSettings as cnfg
+from SeedingScriptSettings import ConfigKeys
 import logging_custom
 
 from pathlib import Path
@@ -905,6 +906,7 @@ def main_seeding_loop(user_action: str, config: cnfg.ScriptConfigFile = None, re
         player_threshold = random.randint(config.random_player_threshold_lower, config.random_player_threshold_upper)
     else:
         player_threshold = config.player_threshold
+
 
     cnfg.init_games_seeding_config(config)
 
