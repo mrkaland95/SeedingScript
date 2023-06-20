@@ -1,7 +1,7 @@
 import unittest
 import SeedingScriptGUI as gui
 import SeedingScriptMain as app
-import SeedingScriptConfig as cnfg
+import SeedingScriptSettings as cnfg
 
 
 # class MyTestCase(unittest.TestCase):
@@ -11,6 +11,7 @@ import SeedingScriptConfig as cnfg
 class TestGUI(unittest.TestCase):
     """
     This test case is just used to check what the gui windows look like.
+    Graphical tests
     """
     def test_settings_window(self):
         gui.settings_window()

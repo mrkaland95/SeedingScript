@@ -226,6 +226,11 @@ def init_json_config(config_path):
         json.dump(config, f,  indent=4)
 
 
+def get_server_to_join():
+    pass
+
+
+
 def main():
     LOCAL_APPDATA = os.path.abspath(os.environ['LOCALAPPDATA'])
     CONFIG_PATH_BASE = os.path.abspath(f'{LOCAL_APPDATA}/SeedingScript')
@@ -260,7 +265,7 @@ def main():
     # Jump out of the loop once it's the wrong time and not run again.
 
     while True:
-        # Guard to check it it's the correct time. Otherwise just waits and occasionally rechecks.
+        # Guard to check if it's the correct time. Otherwise, the script just waits and occasionally rechecks.
         # if not correct_time(LOWER_HOUR, UPPER_HOUR):
         #     print('Not in correct time')
         #     time.sleep(QUERY_INTERVAL_SECONDS)
@@ -278,7 +283,6 @@ def main():
                     time.sleep(QUERY_INTERVAL_SECONDS)
                     continue
 
-
         server = priority_to_server_map[priority_level]
 
         if not player_in_server(server.address, server.port, PLAYER):
@@ -289,6 +293,7 @@ def main():
                 time.sleep(60)
             else:
                 timeout += 1
+
             # Counts up a buffer if the player is not found in the server
             if timeout >= timeout_limit:
                 start_seeding_script_clean(['python', server.script_path, '-close'])

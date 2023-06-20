@@ -1,5 +1,4 @@
 import filecmp
-import multiprocessing
 import threading
 import configparser
 import datetime
@@ -19,12 +18,10 @@ import win32com.client
 import win32gui
 import logging
 import SeedingScriptGUI as gui
-import SeedingScriptSettings as cnfg
+import SeedingScriptSettings as settings
 from SeedingScriptSettings import ConfigKeys
-import logging_custom
 
 from pathlib import Path
-from copy import deepcopy
 from collections import OrderedDict
 
 
@@ -34,10 +31,10 @@ from collections import OrderedDict
 
 # Path globals
 __VERSION__ = "3.0.4"
-LOCAL_APPDATA = os.environ.get('LOCALAPPDATA')
-SCRIPT_CONFIG_SETTINGS_FOLDER = Path(LOCAL_APPDATA) / 'SeedingScript'
-SCRIPT_CONFIG_SETTINGS_FILE = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / 'seedingconfig.json'
-GAME_CONFIG_PATH = Path(LOCAL_APPDATA) / 'SquadGame/Saved/Config/WindowsNoEditor'
+LOCAL_APPDATA = Path(os.environ.get('LOCALAPPDATA'))
+SCRIPT_CONFIG_SETTINGS_FOLDER = LOCAL_APPDATA / 'SeedingScript'
+SCRIPT_CONFIG_SETTINGS_FILE = SCRIPT_CONFIG_SETTINGS_FOLDER / 'seedingconfig.json'
+GAME_CONFIG_PATH = LOCAL_APPDATA / 'SquadGame/Saved/Config/WindowsNoEditor'
 ICONS_FOLDER_NAME = 'icons'
 ICONS_PATH_PERMANENT = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / ICONS_FOLDER_NAME
 ICONS_PATH_LOCAL = Path(os.path.dirname(os.path.realpath(__file__))) / ICONS_FOLDER_NAME
@@ -117,7 +114,7 @@ def init_icons_folder(icons_path_local: str | os.PathLike = ICONS_PATH_LOCAL,
             return
 
 
-def init_game_launch(config: cnfg.ScriptConfigFile = None, delay_from_game_launch: int = 60):
+def init_game_launch(config: settings.ScriptConfigFile = None, delay_from_game_launch: int = 60):
     """
     Initializes launch of the game and applies lightweight settings, if applicable.
     Checks if it's already running before attempting to start.
@@ -127,7 +124,7 @@ def init_game_launch(config: cnfg.ScriptConfigFile = None, delay_from_game_launc
     global GAME_STARTED_BY_SCRIPT
 
     if not config:
-        config = cnfg.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+        config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
     lightweight_seeding_settings = config.lightweight_seeding_settings_enabled
     game_executable = config.game_executable
@@ -151,7 +148,7 @@ def apply_seeding_settings():
     pass
 
 
-def check_seeding_settings(config: cnfg.ScriptConfigFile = None, compare_config: bool = True):
+def check_seeding_settings(config: settings.ScriptConfigFile = None, compare_config: bool = True):
     """
     Applies the lightweight seeding settings to the squad's config folder when called.
     :param:
@@ -159,7 +156,7 @@ def check_seeding_settings(config: cnfg.ScriptConfigFile = None, compare_config:
     """
 
     if not config:
-        config = cnfg.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+        config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
     game_config_path = config.squad_game_config_path
     lightweight_settings_applied = config.lightweight_seeding_settings_applied
 
@@ -213,7 +210,7 @@ def launch_game(game_launcher, game_url):
 
 # TODO Make sure the user config settings will be restored properly at all points
 
-def restore_last_used_settings(config: cnfg.ScriptConfigFile = None,
+def restore_last_used_settings(config: settings.ScriptConfigFile = None,
                                compare_settings: bool = True,
                                restore_delay: bool = False):
     """
@@ -222,10 +219,13 @@ def restore_last_used_settings(config: cnfg.ScriptConfigFile = None,
     """
     # Loads the config object to get needed settings.
     if not config:
-        config = cnfg.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+        config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
-    game_config_path = config.squad_game_config_path
+    game_config_path = config.SQUAD_CONFIG_FILES_PATH
     # lightweight_settings_applied = config.lightweight_seeding_settings_applied
+
+
+
 
     backup_path = os.path.abspath(f'{game_config_path}\Backup')
     current_active_config_file = os.path.abspath(f'{game_config_path}\GameUserSettings.ini')
@@ -251,14 +251,14 @@ def restore_last_used_settings(config: cnfg.ScriptConfigFile = None,
         print('Original settings were already in place\n')
 
 
-def restore_last_used_settings_plain(config: cnfg.ScriptConfigFile):
+def restore_last_used_settings_plain(config: settings.ScriptConfigFile):
     """
     Restores user's original config file to the game when called
     :return:
     """
 
     if not config:
-        config = cnfg.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+        config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
     squad_game_config_path = config.squad_game_config_path
 
@@ -459,12 +459,12 @@ def reconnect_to_server(reconnect_button_img: str):
         print(error)
 
 
-def find_resolution(config: cnfg.ScriptConfigFile):
+def find_resolution(config: settings.ScriptConfigFile):
     """
     Finds the game's resolution based on the settings in the current config file.
     """
     if not config:
-        config = cnfg.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+        config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
     game_config_path = config.squad_game_config_path
     config = configparser.ConfigParser(dict_type=MultiOrderedDict, strict=False)
@@ -801,14 +801,14 @@ def watch_for_interrupt():
         time.sleep(0.05)
 
 
-def autojoin_main_function(config: cnfg.ScriptConfigFile = None):
+def autojoin_main_function(config: settings.ScriptConfigFile = None):
     """
     Function responsible for performing the autojoining of a server.
     """
     # Just to click some inconsequential key in case the monitor is in sleep mode or something
     pyautogui.press('scroll lock')
     if not config:
-        config = cnfg.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+        config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
     # Does a countdown from whatever the desired autojoin delay is.
     # I did this so the overall time spent waiting would be more consistent on around start
@@ -889,18 +889,16 @@ def remove_old_icons_folder(icons_folder_local: str | os.PathLike = ICONS_PATH_L
     return
 
 
-def main_seeding_loop(user_action: str, config: cnfg.ScriptConfigFile = None, resolution: str = "720p"):
+def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile = None, resolution: str = "720p"):
     """
     Main logic the seedingscript loop.
     :return: The desired user action: close, shutdown and hibernate
     """
-
     script_started_game = False
-
     threshold_hit = False
 
     if not config:  # Reloads and creates a new config object if one hasnt been passed.
-        config = cnfg.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+        config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
     if config.random_player_threshold_enabled:
         player_threshold = random.randint(config.random_player_threshold_lower, config.random_player_threshold_upper)
@@ -908,7 +906,7 @@ def main_seeding_loop(user_action: str, config: cnfg.ScriptConfigFile = None, re
         player_threshold = config.player_threshold
 
 
-    cnfg.init_games_seeding_config(config)
+    settings.init_games_seeding_config(config)
 
     init_game_launch()
 
@@ -991,16 +989,19 @@ def main():
     """
     The entry point to the script.
     """
-    chosen_script_action = None
-    cnfg.initialize_folder(SCRIPT_CONFIG_SETTINGS_FOLDER)
-    # Creates the config file if one doesn't exist, in the user's Appdata folder
-    cnfg.init_JSON_config(SCRIPT_CONFIG_SETTINGS_FILE)
-    # Moves the icons folder to the config folder, if it's not already there.
-    init_icons_folder(SCRIPT_CONFIG_SETTINGS_FOLDER)
+    # chosen_script_action = None
 
-    # Loads the config settings to memory
-    config_object = cnfg.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
-    cnfg.init_games_seeding_config(config_object)
+
+    if not os.path.exists(SCRIPT_CONFIG_SETTINGS_FOLDER):
+        os.mkdir(SCRIPT_CONFIG_SETTINGS_FOLDER)
+
+    if not os.path.exists(SCRIPT_CONFIG_SETTINGS_FILE):
+        settings.generate_initial_config(SCRIPT_CONFIG_SETTINGS_FILE)
+
+    config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+
+    if config.get(ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED):
+        settings.init_games_seeding_config()
 
     # Loads the user action to the user action variable, if it was supplied in the arguments.
     chosen_script_action = cmdline_argument_handler()
@@ -1009,10 +1010,10 @@ def main():
     # Or from the config file.
 
     if chosen_script_action is None:
-        chosen_script_action = config_object.default_user_action
+        chosen_script_action = config.config.get(ConfigKeys.DEFAULT_USER_ACTION)
 
     if chosen_script_action in ('close', 'shutdown', 'hibernate'):
-        main_seeding_loop(chosen_script_action, config_object)
+        seeding_pipeline(chosen_script_action, config)
     else:
         # Starts the main window.
         gui.main_window()
