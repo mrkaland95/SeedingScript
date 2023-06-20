@@ -88,7 +88,7 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
     """
 
     # Reloads the parameters from the config file.
-    config = cnfg.BasicConfigFile(app.SCRIPT_CONFIG_SETTINGS_FILE)
+    config = cnfg.ScriptConfigFile(app.SCRIPT_CONFIG_SETTINGS_FILE)
     config_baseline = deepcopy(config)
 
     # so the value can be update in the slider without affecting the global variable
