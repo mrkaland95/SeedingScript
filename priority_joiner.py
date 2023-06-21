@@ -3,12 +3,9 @@ import json
 import enum
 import subprocess
 import os
-import sys
 import time
 import a2s
 import psutil
-
-
 
 # This is intended for Flax' personal use, experimental script to join the server on my secondary devices if the server dips below a certain threshold
 # And within a specified timeframe.
@@ -176,8 +173,8 @@ def process_running(executable):
     Checks if the supplied process is running, returns a boolean.
     """
     try:
-        game_running = executable.lower() in (p.name().lower() for p in psutil.process_iter())
-        return game_running
+        is_process_running = executable.lower() in (p.name().lower() for p in psutil.process_iter())
+        return is_process_running
     except Exception as error:
         print(error)
         print("Something went wrong in finding the game process")
@@ -226,6 +223,11 @@ def init_json_config(config_path):
         json.dump(config, f,  indent=4)
 
 
+def get_server_to_join():
+    pass
+
+
+
 def main():
     LOCAL_APPDATA = os.path.abspath(os.environ['LOCALAPPDATA'])
     CONFIG_PATH_BASE = os.path.abspath(f'{LOCAL_APPDATA}/SeedingScript')
@@ -243,7 +245,7 @@ def main():
 
     # Creates the server objects
     theCage = SquadServer('TheCage', 'TheCage_SeedingScript.py', CONFIG_PATH_CAGE)
-    tacTrig = SquadServer('TacticalTriggernometry', 'SeedingScriptMain.py', CONFIG_PATH_TRIG)
+    tacTrig = SquadServer('TacticalTriggernometry', 'Main.py', CONFIG_PATH_TRIG)
 
     priority_to_server_map = {
         1: theCage,
@@ -260,7 +262,7 @@ def main():
     # Jump out of the loop once it's the wrong time and not run again.
 
     while True:
-        # Guard to check it it's the correct time. Otherwise just waits and occasionally rechecks.
+        # Guard to check if it's the correct time. Otherwise, the script just waits and occasionally rechecks.
         # if not correct_time(LOWER_HOUR, UPPER_HOUR):
         #     print('Not in correct time')
         #     time.sleep(QUERY_INTERVAL_SECONDS)
@@ -278,7 +280,6 @@ def main():
                     time.sleep(QUERY_INTERVAL_SECONDS)
                     continue
 
-
         server = priority_to_server_map[priority_level]
 
         if not player_in_server(server.address, server.port, PLAYER):
@@ -289,6 +290,7 @@ def main():
                 time.sleep(60)
             else:
                 timeout += 1
+
             # Counts up a buffer if the player is not found in the server
             if timeout >= timeout_limit:
                 start_seeding_script_clean(['python', server.script_path, '-close'])

@@ -16,11 +16,14 @@
         </list>
       </option>
     </inspection_tool>
-    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="ERROR" enabled_by_default="true" editorAttributes="ERRORS_ATTRIBUTES">
       <option name="ignoredIdentifiers">
         <list>
           <option value="os._ScandirIterator.path" />
           <option value="os._ScandirIterator.*" />
+          <option value="cv2.COLOR_RGB2BGR" />
+          <option value="cv2.cvtColor" />
+          <option value="pythoncom.CoInitialize" />
         </list>
       </option>
     </inspection_tool>
