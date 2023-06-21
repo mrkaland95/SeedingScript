@@ -78,8 +78,6 @@ PROGRAM_SHUTDOWN = False
 ##############################################################################################
 
 
-
-# TODO Add some way to make the script move the needed icons to the seedingscript folder in APPDATA
 # TODO Make sure script threads are killed properly if start_seedingscript_remote window is closed.
 # TODO Make sure only one seeding process can run at only one time
 # TODO Add ability to join any server without using images OCRTesseract
@@ -126,15 +124,15 @@ def init_game_launch(config: settings.ScriptConfigFile = None, delay_from_game_l
     if not config:
         config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
-    lightweight_seeding_settings = config.lightweight_seeding_settings_enabled
-    game_executable = config.game_executable
-    game_url = config.steam_url_handle
-    squad_install = config.squad_install_path
+    lightweight_seeding_settings_enabled = config.get(ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED)
+    game_executable = config.get(ConfigKeys.GAME_EXECUTABLE_NAME)
+    game_url = config.get(ConfigKeys.SQUAD_STEAM_URL_HANDLE)
+    squad_install = config.get(ConfigKeys.SQUAD_INSTALL_PATH)
 
     if process_running(game_executable):  # is game is already running? Then exit the function.
         return
 
-    if lightweight_seeding_settings:
+    if lightweight_seeding_settings_enabled:
         check_seeding_settings()
         t = threading.Thread(target=restore_last_used_settings, name='Restore Settings Thread', kwargs={'restore_delay': True})
         t.start()
@@ -143,6 +141,7 @@ def init_game_launch(config: settings.ScriptConfigFile = None, delay_from_game_l
     GAME_STARTED_BY_SCRIPT = True
     time.sleep(delay_from_game_launch)
     return
+
 
 def apply_seeding_settings():
     pass
@@ -157,8 +156,8 @@ def check_seeding_settings(config: settings.ScriptConfigFile = None, compare_con
 
     if not config:
         config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
-    game_config_path = config.squad_game_config_path
-    lightweight_settings_applied = config.lightweight_seeding_settings_applied
+    game_config_path = config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH)
+    lightweight_settings_applied = config.get(ConfigKeys.LIGHTWEIGHT_SETTINGS_CURRENTLY_APPLIED)
 
     original_path = os.path.abspath(game_config_path)
     backup_folder_path = os.path.abspath(f'{original_path}\\Backup')
@@ -181,8 +180,11 @@ def check_seeding_settings(config: settings.ScriptConfigFile = None, compare_con
     shutil.copyfile(current_config, backup_in_script_config)
     # Copies the lightweight config settings to active config file.
     shutil.copyfile(swap_config_file, current_config)
+
     config.lightweight_seeding_settings_applied = True
     config.save_settings()
+
+    print("Lightweight seeding settings applied")
     logging.info("Lightweight seeding settings applied")
 
 
@@ -221,18 +223,18 @@ def restore_last_used_settings(config: settings.ScriptConfigFile = None,
     if not config:
         config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
-    game_config_path = config.SQUAD_CONFIG_FILES_PATH
-    # lightweight_settings_applied = config.lightweight_seeding_settings_applied
+    game_config_path_inner = Path(config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH))
 
-
-
-
-    backup_path = os.path.abspath(f'{game_config_path}\Backup')
-    current_active_config_file = os.path.abspath(f'{game_config_path}\GameUserSettings.ini')
+    backup_path = Path(game_config_path_inner) / 'Backup'
+    current_active_config_file = game_config_path_inner / 'GameUserSettings.ini'
     last_used_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
     swap_file = os.path.abspath(f'{backup_path}\GameUserSettingsSwapFile.ini')
     cmp_swap_to_current = filecmp.cmp(swap_file, current_active_config_file)
 
+    """
+    Beacuse the files are being loaded and changed when squad launches,
+    We may need to have a delay before restoring the game's settings, otherwise they will just be overwritten by the game.
+    """
     if restore_delay:
         time.sleep(60)
 
@@ -242,13 +244,14 @@ def restore_last_used_settings(config: settings.ScriptConfigFile = None,
         print(err)
 
     if filecmp.cmp(last_used_config_file, current_active_config_file):
-        config.lightweight_seeding_settings_applied = False
-        with open(SCRIPT_CONFIG_SETTINGS_FILE, 'w') as f:
-            json.dump(config, f, indent=4)
+        config.set(ConfigKeys.LIGHTWEIGHT_SETTINGS_CURRENTLY_APPLIED, False)
+        config.save_settings()
         print('Last used settings have been restored\n')
+        return True
 
     elif not filecmp.cmp(last_used_config_file, current_active_config_file):
         print('Original settings were already in place\n')
+        return False
 
 
 def restore_last_used_settings_plain(config: settings.ScriptConfigFile):

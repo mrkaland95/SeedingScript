@@ -1,5 +1,4 @@
 import configparser
-import enum
 import json
 import logging
 import os
@@ -12,7 +11,7 @@ VALUE_KEY = 'value'
 DESCRIPTION_KEY = 'description'
 
 # Path globals
-__VERSION__ = "3.0.4"
+__VERSION__ = "3.1.0"
 LOCAL_APPDATA = os.environ.get('LOCALAPPDATA')
 SCRIPT_CONFIG_SETTINGS_FOLDER = Path(LOCAL_APPDATA) / 'SeedingScript'
 SCRIPT_CONFIG_SETTINGS_FILE = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / 'seedingconfig.json'
@@ -74,9 +73,6 @@ class ScriptConfigFile:
         else:
             self.config[key.value] = {VALUE_KEY: value}
 
-    def _load_settings(self):
-        return {key: self.get(key) for key in ConfigKeys}
-
     def save_settings(self):
         with open(self.config_path, 'w') as f:
             json.dump(self.config, f, indent=4)
@@ -103,54 +99,51 @@ def generate_initial_config(path: Path):
 def initial_config():
     """
     Function responsible for initiating the JSON file
-
-    :param config_file:
     :return:
     """
     seedingscript_config: dict = {
         'version': __VERSION__,
 
         ConfigKeys.PLAYER_NAME:
-            {
-                VALUE_KEY: "",
-                DESCRIPTION_KEY: "The user's in-game player name, tags not included. Used to see if the player is connected to the server"
-            },
+        {
+            VALUE_KEY: "",
+            DESCRIPTION_KEY: "The user's in-game player name, tags not included. Used to see if the player is connected to the server"
+        },
         ConfigKeys.PLAYER_THRESHOLD:
-            {
-                VALUE_KEY: 60,
-                DESCRIPTION_KEY: 'The threshold that the desired user action will be taken. Overriden by the "Seeding Random" parameter, if enabled'
-            },
+        {
+            VALUE_KEY: 60,
+            DESCRIPTION_KEY: 'The threshold that the desired user action will be taken. Overriden by the "Seeding Random" parameter, if enabled'
+        },
         ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER:
-            {
-                VALUE_KEY: False,
-                DESCRIPTION_KEY: 'Whether the script will attempt to reconnect if the user is no longer in the server'
-            },
-
+        {
+            VALUE_KEY: False,
+            DESCRIPTION_KEY: 'Whether the script will attempt to reconnect if the user is no longer in the server'
+        },
         ConfigKeys.SERVER_IP:
-            {
-                VALUE_KEY: '',
-                DESCRIPTION_KEY: 'The IP/Domain of the server, that the script will query for player numbers.'
-            },
+        {
+            VALUE_KEY: '',
+            DESCRIPTION_KEY: 'The IP/Domain of the server, that the script will query for player numbers.'
+        },
         ConfigKeys.SERVER_QUERY_PORT:
-            {
-                VALUE_KEY: 27165,
-                DESCRIPTION_KEY: 'The port the script will use to query the server for player numbers'
-            },
+        {
+            VALUE_KEY: 27165,
+            DESCRIPTION_KEY: 'The port the script will use to query the server for player numbers'
+        },
         ConfigKeys.SLEEP_INTERVAL_SECONDS:
-            {
-                VALUE_KEY: 60,
-                DESCRIPTION_KEY: 'How often the script'
-            },
+        {
+            VALUE_KEY: 60,
+            DESCRIPTION_KEY: 'How often the script'
+        },
         ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED:
-            {
-                VALUE_KEY: True,
-                DESCRIPTION_KEY: 'Whether script will utilise a random seeding threshold between the specified upper and lower bounds. On by default'
-            },
+        {
+            VALUE_KEY: True,
+            DESCRIPTION_KEY: 'Whether script will utilise a random seeding threshold between the specified upper and lower bounds. On by default'
+        },
         ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER:
-            {
-                VALUE_KEY: 60,
-                DESCRIPTION_KEY: 'The lower bound of the random seeding threshold'
-            },
+        {
+            VALUE_KEY: 60,
+            DESCRIPTION_KEY: 'The lower bound of the random seeding threshold'
+        },
         ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER: {
             VALUE_KEY: 98,
             DESCRIPTION_KEY: 'The upper bound of the random seeding threshold'
@@ -213,25 +206,6 @@ def initial_config():
     return seedingscript_config
 
 
-def save_json_config(config: dict, config_file_path: str | os.PathLike) -> None:
-    """
-    Saves a python dictonary to a json file.
-    """
-    with open(config_file_path, 'w') as f:
-        json.dump(config, f, indent=4)
-    return
-
-
-def load_json_config(config_file_path: str | os.PathLike) -> dict:
-    """
-    Loads the settings from the config files.
-    :return: Python dictionary with all the settings from the config file
-    """
-    with open(config_file_path, 'r') as f:
-        config_file_json = json.load(f)
-    return config_file_json
-
-
 def init_games_seeding_config():
     """
     Initializes the in game config file for setting applying seeding settings, if applicable.
@@ -239,10 +213,6 @@ def init_games_seeding_config():
     :param:
     :return:
     """
-
-    # lightweight_seeding_settings = config.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED
-    # if not lightweight_seeding_settings:
-    #     return
 
     game_original_config_path = Path(game_config_path)
     backup_path = game_original_config_path / 'Backup'

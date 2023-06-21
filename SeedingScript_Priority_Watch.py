@@ -3,12 +3,9 @@ import json
 import enum
 import subprocess
 import os
-import sys
 import time
 import a2s
 import psutil
-
-
 
 # This is intended for Flax' personal use, experimental script to join the server on my secondary devices if the server dips below a certain threshold
 # And within a specified timeframe.
@@ -176,8 +173,8 @@ def process_running(executable):
     Checks if the supplied process is running, returns a boolean.
     """
     try:
-        game_running = executable.lower() in (p.name().lower() for p in psutil.process_iter())
-        return game_running
+        is_process_running = executable.lower() in (p.name().lower() for p in psutil.process_iter())
+        return is_process_running
     except Exception as error:
         print(error)
         print("Something went wrong in finding the game process")

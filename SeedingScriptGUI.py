@@ -1,13 +1,9 @@
-import json
-import logging
 import multiprocessing
-import os
 import sys
 import time
 import PySimpleGUI as sg
 import SeedingScriptMain as app
-import SeedingScriptSettings as cnfg
-from SeedingScriptSettings import ConfigKeys
+from SeedingScriptSettings import ConfigKeys, ScriptConfigFile, LOCAL_APPDATA, SCRIPT_CONFIG_SETTINGS_FILE
 from copy import deepcopy
 
 # TODO Add a button to the settings page that will open the backup settings for the config files.
@@ -77,7 +73,8 @@ def user_action_window(window_theme: str = DEFAULT_WINDOW_THEME,
     window.close()
 
 
-def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
+def settings_window(config: ScriptConfigFile,
+                    window_theme: str = DEFAULT_WINDOW_THEME,
                     element_font: tuple[str, int] = DEFAULT_GUI_FONT):
     """
     Calling this function creates an instance of the settings window as defined below. This is where the logic
@@ -89,7 +86,6 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
     sg.SystemTray(tooltip='SeedingScript')
 
     # Reloads the parameters from the config file.
-    config = cnfg.ScriptConfigFile(app.SCRIPT_CONFIG_SETTINGS_FILE)
     config_initial = deepcopy(config)
 
     save_key = 'SAVE'
@@ -214,7 +210,7 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
             [sg.Text("Path to Squad's game config files", font=('helvetica', 14))],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SQUAD_CONFIG_FILES_PATH,
                           default_text=config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH), enable_events=True),
-             sg.FolderBrowse(initial_folder=cnfg.LOCAL_APPDATA)],
+             sg.FolderBrowse(initial_folder=LOCAL_APPDATA)],
 
             [sg.Text('Server name to autojoin', font=('helvetica', 14))],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN,
@@ -262,18 +258,20 @@ def settings_window(window_theme: str = DEFAULT_WINDOW_THEME,
                 try:
                     # Updates the window with an integer value if possible, which ensures an integer when saving.
                     values[event] = int(values[event])
+                    config.set(event, values[event])
                 except ValueError:
                     window.Element(event).Update(00)
-        else:
-            for key in ConfigKeys:
-                if event == key and values[key] != config.get(key):
-                    config.set(key, values[key])
+
+        for key in ConfigKeys:
+            if event == key and values[key] != config.get(key):
+                config.set(key, values[key])
 
         if event == save_key:
             if config != config_initial:
                 print('Settings have been saved')
                 config.save_settings()
                 config_initial = deepcopy(config)
+
         elif event == default_key:
             print(f'Settings have been reset')
             config.reset_to_defaults()
@@ -356,7 +354,7 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
             app.restore_last_used_settings(compare_settings=False)
 
         elif event == open_settings_window_key:
-            settings_window()
+            settings_window(config=ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE))
 
         # Only opens the action prompt if the seeding process is not already running.
         elif event == start_seedingscript_key:
@@ -391,4 +389,17 @@ def save_prompt(window_theme: str = DEFAULT_WINDOW_THEME,
         [sg.Text('There are unsaved changes. Do you want to save them before exiting?')],
         [sg.Button('Save and Exit', key=yes_key), sg.Button('Exit without saving', key=no_key)]]
 
-    sg.Window('Do you wish to save unsaved changes?', layout)
+    window = sg.Window('Do you wish to save unsaved changes?', layout, size=(300, 300))
+
+    while True:
+        event, values = window.read(timeout=150)
+
+        if event in ('Exit', sg.WIN_CLOSED):
+            app.PROGRAM_SHUTDOWN = True
+            break
+
+        elif event == yes_key:
+            pass
+
+        elif event == no_key:
+            pass

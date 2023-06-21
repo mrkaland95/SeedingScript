@@ -1,9 +1,14 @@
 import unittest
+
+import a2s
+
 import SeedingScriptGUI as gui
 import SeedingScriptMain as app
 import SeedingScriptSettings as cnfg
+import utils
 from SeedingScriptImageRecognition import find_string_on_screen
 
+config = cnfg.ScriptConfigFile(cnfg.SCRIPT_CONFIG_SETTINGS_FILE)
 
 class TestGUI(unittest.TestCase):
     """
@@ -11,7 +16,7 @@ class TestGUI(unittest.TestCase):
     Graphical tests
     """
     def test_settings_window(self):
-        gui.settings_window()
+        gui.settings_window(config=config)
 
     def test_main_window(self):
         gui.main_window()
@@ -22,11 +27,21 @@ class TestGUI(unittest.TestCase):
 
 class TestOCR(unittest.TestCase):
     def testOCR(self):
+        """
+        This will fail if the method is not visible. A bit of a dumb test.
+        """
         string = 'testocr'
         x, y = find_string_on_screen(string)
         self.assertIsNotNone(x)
         self.assertIsNotNone(y)
 
+
+class TestUtils(unittest.TestCase):
+    def test_find_playercount(self):
+        ip = '23.228.238.22'
+        port = 27175
+        players = utils.get_current_playercount((ip, port))
+        print(players)
 
 
 if __name__ == '__main__':
