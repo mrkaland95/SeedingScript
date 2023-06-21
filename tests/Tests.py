@@ -2,11 +2,8 @@ import unittest
 import SeedingScriptGUI as gui
 import SeedingScriptMain as app
 import SeedingScriptSettings as cnfg
+from SeedingScriptImageRecognition import find_string_on_screen
 
-
-# class MyTestCase(unittest.TestCase):
-#     def test_something(self):
-#         self.assertEqual(True, False)  # add assertion here
 
 class TestGUI(unittest.TestCase):
     """
@@ -21,6 +18,14 @@ class TestGUI(unittest.TestCase):
 
     def test_user_action_window(self):
         gui.user_action_window()
+
+
+class TestOCR(unittest.TestCase):
+    def testOCR(self):
+        string = 'testocr'
+        x, y = find_string_on_screen(string)
+        self.assertIsNotNone(x)
+        self.assertIsNotNone(y)
 
 
 
