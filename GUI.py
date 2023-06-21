@@ -2,8 +2,8 @@ import multiprocessing
 import sys
 import time
 import PySimpleGUI as sg
-import SeedingScriptMain as app
-from SeedingScriptSettings import ConfigKeys, ScriptConfigFile, LOCAL_APPDATA, SCRIPT_CONFIG_SETTINGS_FILE
+import Main as app
+from Settings import ConfigKeys, ScriptConfigFile, LOCAL_APPDATA, SCRIPT_CONFIG_SETTINGS_FILE
 from copy import deepcopy
 
 # TODO Add a button to the settings page that will open the backup settings for the config files.
@@ -13,12 +13,14 @@ DEFAULT_WINDOW_THEME = 'DarkGrey14'
 DEFAULT_GUI_FONT = ('helvetica', 15)
 
 
-def user_action_window(window_theme: str = DEFAULT_WINDOW_THEME,
+def user_action_window(config: ScriptConfigFile,
+                        window_theme: str = DEFAULT_WINDOW_THEME,
                        element_font: tuple[str, int] = DEFAULT_GUI_FONT):
     """
     The window for choosing
     :return:
     """
+
 
     sg.theme(window_theme)
     close_game_key = '-CLOSE_GAME-'
@@ -63,7 +65,7 @@ def user_action_window(window_theme: str = DEFAULT_WINDOW_THEME,
             if event in user_actions:
                 desired_useraction = user_actions[event]
                 seeding_process = multiprocessing.Process(target=app.seeding_pipeline, daemon=True,
-                                                          kwargs={'user_action': desired_useraction})
+                                                          kwargs={'user_action': desired_useraction, 'config': config})
                 seeding_process.name = 'seeding_process'
                 seeding_process.start()
                 if not seeding_process.is_alive():
@@ -98,14 +100,16 @@ def settings_window(config: ScriptConfigFile,
 
              sg.Text('Player Threshold', font=('Helvetica', 14), pad=(120, 0))],
 
-            [sg.InputText(size=(18, 20), key=ConfigKeys.SERVER_IP, default_text=config.get(ConfigKeys.SERVER_IP),
+            [sg.InputText(size=(18, 20), key=ConfigKeys.SERVER_IP,
+                          default_text=config.get(ConfigKeys.SERVER_IP),
                           enable_events=True),
 
              sg.InputText(size=(5, 10), key=ConfigKeys.PLAYER_THRESHOLD,
-                          default_text=config.get(ConfigKeys.PLAYER_THRESHOLD), enable_events=True,
+                          default_text=config.get(ConfigKeys.PLAYER_THRESHOLD),
+                          enable_events=True,
                           pad=(55, 0))],
 
-            [sg.Text('ServerClient query port', font=('Helvetica', 14))],
+            [sg.Text("Server's query port", font=('Helvetica', 14))],
 
             [sg.InputText(size=(18, 20), key=ConfigKeys.SERVER_QUERY_PORT,
                           default_text=config.get(ConfigKeys.SERVER_QUERY_PORT), enable_events=True)],
@@ -162,7 +166,7 @@ def settings_window(config: ScriptConfigFile,
                            size=(5, 20),
                            default_value=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER),
                            key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER, enable_events=True)]],
-                      element_justification='center'),
+                            element_justification='center'),
 
              # Right bottom frame on the left main_seeding_loop frame.
              sg.Frame("", layout=[
@@ -173,22 +177,22 @@ def settings_window(config: ScriptConfigFile,
                                enable_events=True,
                                tooltip='How many attempts the script will attempt to autojoin the server before giving up')],
 
-                 [sg.Text('ServerClient query and sleep interval')],
+                 [sg.Text('Game Server query interval')],
                  [sg.InputText(key=ConfigKeys.SLEEP_INTERVAL_SECONDS, size=(5, 5),
                                default_text=config.get(ConfigKeys.SLEEP_INTERVAL_SECONDS),
                                enable_events=True,
                                tooltip=
-                               'How often the program will try and query the server for player numbers, defined in sconds. '
-                               'Default is 60 seconds, but generally shouldnt need to be touched')],
+                               'How often the program will try and query the server for player numbers, defined in seconds. '
+                               'Default is 60 seconds, but generally shouldnt need to be touched'), sg.Text('Seconds')],
 
-                 [sg.Text('Autojoin delay in seconds')],
+                 [sg.Text('Auto join delay')],
                  [sg.InputText(key=ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS, size=(5, 5),
                                default_text=config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS),
                                tooltip=
                                'The amount of time from when the game launched, '
                                'to when the script will attempt to autojoin the specified server, '
                                'This will ',
-                               enable_events=True)]
+                               enable_events=True), sg.Text('Seconds')]
              ])]])]])
 
     # Defining the right side of the settings window. Mainly contains input fields for paths
@@ -262,6 +266,16 @@ def settings_window(config: ScriptConfigFile,
                 except ValueError:
                     window.Element(event).Update(00)
 
+
+        # upper_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER]
+        # lower_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER]
+        # if lower_value >= upper_value:
+        #     window.Element(event).Update(upper_value - 1)
+        #     window.refresh()
+        # elif upper_value <= lower_value:
+        #     window.Element(event).Update(lower_value + 1)
+        #     window.refresh()
+
         for key in ConfigKeys:
             if event == key and values[key] != config.get(key):
                 config.set(key, values[key])
@@ -275,6 +289,7 @@ def settings_window(config: ScriptConfigFile,
         elif event == default_key:
             print(f'Settings have been reset')
             config.reset_to_defaults()
+            # TODO add a way that all the GUI fields get updated when a reset happens.
 
 
             # for key in ConfigKeys:
@@ -286,6 +301,11 @@ def settings_window(config: ScriptConfigFile,
     window.close()
 
 
+def help_window():
+    pass
+
+
+
 def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
                 element_font: tuple[str, int] = DEFAULT_GUI_FONT):
     """
@@ -294,6 +314,11 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
     """
     # global SeedingScriptMain
     sg.theme(window_theme)
+
+
+    config = ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+
+
 
     open_settings_window_key = 'Open'
     stop_seeding_key = '-STOP_SEEDING-'
@@ -330,9 +355,13 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
         [
             sg.Button('Start SeedingScript', key=start_seedingscript_key, font=('helvetica', 16),
                       auto_size_button=True),
-            sg.Button('Restore last game settings', key=restore_settings_key, font=('helvetica', 16),
+            sg.Button('Restore last used settings', key=restore_settings_key, font=('helvetica', 16),
+                      auto_size_button=True, tooltip='Restores the settings that was '
+                                                     'stored before the last time seeding settings were applied'),
+            sg.Button('Stop Seeding Process', key=stop_seeding_key, font=('helvetica', 16),
                       auto_size_button=True),
-            sg.Button('Stop seeding process', key=stop_seeding_key, font=('helvetica', 16), auto_size_button=True)
+            sg.Button('Restore Original Settings')
+
         ],
 
         left_col]
@@ -354,12 +383,12 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
             app.restore_last_used_settings(compare_settings=False)
 
         elif event == open_settings_window_key:
-            settings_window(config=ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE))
+            settings_window(config=config)
 
         # Only opens the action prompt if the seeding process is not already running.
         elif event == start_seedingscript_key:
             if not app.SEEDING_PROCESS:
-                user_action_window()
+                user_action_window(config=config)
 
         # Checks if the seeding_process variable is the initialized value,
         # if not, it means that a process has been initialized,

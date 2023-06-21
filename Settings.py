@@ -2,10 +2,10 @@ import configparser
 import json
 import logging
 import os
-import shutil
-from enum import StrEnum, auto
 from collections import OrderedDict
+from enum import Enum, StrEnum, auto
 from pathlib import Path
+from shutil import copyfile
 
 VALUE_KEY = 'value'
 DESCRIPTION_KEY = 'description'
@@ -57,25 +57,25 @@ class ConfigKeys(StrEnum):
 class ScriptConfigFile:
     def __init__(self, config_path: Path):
         self.config_path: Path = config_path
-        self.config: dict = self.load_settings()
+        self._config: dict = self.load_settings()
 
     def __eq__(self, other):
         if isinstance(other, ScriptConfigFile):
-            return self.config == other.config
+            return self._config == other._config
         return False
 
     def get(self, key: ConfigKeys):
-        return self.config.get(key.value, {}).get(VALUE_KEY, None)
+        return self._config.get(key.value, {}).get(VALUE_KEY, None)
 
     def set(self, key: ConfigKeys, value):
-        if key.value in self.config:
-            self.config[key.value][VALUE_KEY] = value
+        if key.value in self._config:
+            self._config[key.value][VALUE_KEY] = value
         else:
-            self.config[key.value] = {VALUE_KEY: value}
+            self._config[key.value] = {VALUE_KEY: value}
 
     def save_settings(self):
         with open(self.config_path, 'w') as f:
-            json.dump(self.config, f, indent=4)
+            json.dump(self._config, f, indent=4)
         return
 
     def load_settings(self):
@@ -84,8 +84,13 @@ class ScriptConfigFile:
         return config_file_json
 
     def reset_to_defaults(self):
-        self.config = initial_config()
+        self._config = initial_config()
         self.save_settings()
+
+class UserActions(StrEnum):
+    CLOSE = auto()
+    SHUTDOWN = auto()
+    HIBERNATE = auto()
 
 
 def generate_initial_config(path: Path):
@@ -122,12 +127,12 @@ def initial_config():
         ConfigKeys.SERVER_IP:
         {
             VALUE_KEY: '',
-            DESCRIPTION_KEY: 'The IP/Domain of the server, that the script will query for player numbers.'
+            DESCRIPTION_KEY: 'The IP/Domain of the server, which will be queried.'
         },
         ConfigKeys.SERVER_QUERY_PORT:
         {
             VALUE_KEY: 27165,
-            DESCRIPTION_KEY: 'The port the script will use to query the server for player numbers'
+            DESCRIPTION_KEY: 'The port the script will use to query the server'
         },
         ConfigKeys.SLEEP_INTERVAL_SECONDS:
         {
@@ -162,7 +167,7 @@ def initial_config():
             DESCRIPTION_KEY: ''
         },
         ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN: {
-            VALUE_KEY: 'triggernometry',
+            VALUE_KEY: 'tactrig',
             DESCRIPTION_KEY: 'The server handle the script will use to attempt to autojoin'
         },
         ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED: {
@@ -230,22 +235,21 @@ def init_games_seeding_config():
             return
 
         logging.debug(f'Copying file')
-
-        shutil.copyfile(original_config_file, seeding_settings_swap_file)
+        copyfile(original_config_file, seeding_settings_swap_file)
 
     if not os.path.exists(on_startup_file):
         try:
-            shutil.copyfile(original_config_file, on_startup_file)
+            copyfile(original_config_file, on_startup_file)
         except FileExistsError:
             return
 
-    # To allow keys to still have multiple values. Otherwise the game's config file will break and not work.
+    # To allow keys to still have multiple values. Otherwise, the game's config file will break and not work.
     seedingparser = configparser.ConfigParser(dict_type=MultiOrderedDict, strict=False)
     seedingparser.optionxform = str
     seedingparser.read(seeding_settings_swap_file)
-    mainsection = seedingparser['/Script/Squad.SQGameUserSettings']
     # Initiates the basic settings for the game's config file.
     # All 4 sections below are required to change resolution before the game starts.
+    mainsection = seedingparser['/Script/Squad.SQGameUserSettings']
     mainsection['ResolutionSizeX'] = "1280"
     mainsection['ResolutionSizeY'] = "720"
     mainsection['LastUserConfirmedResolutionSizeX'] = "1280"
@@ -262,10 +266,11 @@ def init_games_seeding_config():
         seedingparser.write(writefile)
 
     if not os.path.exists(on_startup_file):
-        shutil.copyfile(original_config_file, on_startup_file)
+        copyfile(original_config_file, on_startup_file)
     if not os.path.exists(backup_config_file):
-        shutil.copyfile(original_config_file, backup_config_file)
-    return
+        copyfile(original_config_file, backup_config_file)
+
+    return True
 
 
 class MultiOrderedDict(OrderedDict):
@@ -282,6 +287,12 @@ class MultiOrderedDict(OrderedDict):
 
 
 def main():
+    # Ensure that all the keys of the configkeys are in the config file
+
+
+
+
+
     pass
 
 

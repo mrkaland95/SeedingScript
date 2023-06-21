@@ -23,6 +23,7 @@
           <option value="os._ScandirIterator.*" />
           <option value="cv2.COLOR_RGB2BGR" />
           <option value="cv2.cvtColor" />
+          <option value="pythoncom.CoInitialize" />
         </list>
       </option>
     </inspection_tool>

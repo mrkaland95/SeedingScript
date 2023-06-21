@@ -245,7 +245,7 @@ def main():
 
     # Creates the server objects
     theCage = SquadServer('TheCage', 'TheCage_SeedingScript.py', CONFIG_PATH_CAGE)
-    tacTrig = SquadServer('TacticalTriggernometry', 'SeedingScriptMain.py', CONFIG_PATH_TRIG)
+    tacTrig = SquadServer('TacticalTriggernometry', 'Main.py', CONFIG_PATH_TRIG)
 
     priority_to_server_map = {
         1: theCage,

@@ -2,11 +2,11 @@ import unittest
 
 import a2s
 
-import SeedingScriptGUI as gui
-import SeedingScriptMain as app
-import SeedingScriptSettings as cnfg
+import GUI as gui
+import Main as app
+import Settings as cnfg
 import utils
-from SeedingScriptImageRecognition import find_string_on_screen
+from utils import get_location_of_single_string_on_screen
 
 config = cnfg.ScriptConfigFile(cnfg.SCRIPT_CONFIG_SETTINGS_FILE)
 
@@ -31,9 +31,18 @@ class TestOCR(unittest.TestCase):
         This will fail if the method is not visible. A bit of a dumb test.
         """
         string = 'testocr'
-        x, y = find_string_on_screen(string)
+        x, y = get_location_of_single_string_on_screen(string)
         self.assertIsNotNone(x)
         self.assertIsNotNone(y)
+
+
+class TestAutojoin(unittest.TestCase):
+    def testAutojoin(self):
+
+        # Temp
+        pass
+
+
 
 
 class TestUtils(unittest.TestCase):
