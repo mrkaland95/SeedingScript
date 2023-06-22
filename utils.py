@@ -1,9 +1,6 @@
 import logging
 import os
-
-import cv2
-import easyocr
-import numpy as np
+import subprocess
 import psutil
 import pyautogui
 import pythoncom
@@ -12,13 +9,12 @@ import win32gui
 from a2s import players
 
 
-
-def player_in_server(server_address: tuple[str, int], player: str) -> bool:
+def player_in_server(server_address: tuple[str, int], name: str) -> bool:
     in_server = False
     try:
         server_players = players(server_address)
-        for playr in server_players:
-            if player.lower() in playr.name.lower():
+        for player in server_players:
+            if name.lower() in player.name.lower():
                 in_server = True
                 break
 
@@ -29,8 +25,7 @@ def player_in_server(server_address: tuple[str, int], player: str) -> bool:
     return in_server
 
 
-
-def get_current_playercount(server_address: tuple[str, int], timeout: float = 3.0):
+def get_current_playercount(server_address: tuple[str, int], timeout: float = 3.0) -> int:
     """
     The amount of players that are actively loaded in to the server. Done this way since the attribute of a2s.players
     includes players in queue.
@@ -116,7 +111,8 @@ def force_window_to_foreground(window_handle):
         return window_handle
     except Exception as error:
         logging.warning(error)
-        logging.warning('The script was likely unable to either find the game window handle, or force the window to top')
+        logging.warning(
+            'The script was likely unable to either find the game window handle, or force the window to top')
         logging.warning(
             'This could possibly be a permission issue. For example if the "Start" menu was active as the top window.')
 
@@ -159,39 +155,19 @@ def find_squad_hwnd():
         # print('The script was unable to find Squads window handle.')
 
 
-def get_location_of_single_string_on_screen(text: str) -> tuple[int, int]:
-    """
-
-    """
-    result = get_all_text_on_screen()
-    # Look for the text
-    for item in result:
-        if text.lower() in item[1].lower():
-            # Calculate the center position of the found text
-            bounding_box = item[0]
-            x = (bounding_box[0][0] + bounding_box[2][0]) / 2
-            y = (bounding_box[0][1] + bounding_box[2][1]) / 2
-
-            # Return the coordinates
-            return x, y
-
-    # Return None if the text is not found
-    return None, None
-
-
-def get_all_text_on_screen():
-    # Take a screenshot
-    screenshot = pyautogui.screenshot()
-
-    # Convert the PIL Image to OpenCV format (numpy array)
-    screenshot = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-
-    # Initialize EasyOCR reader
-    reader = easyocr.Reader(['en'])
-
-    # Perform OCR using EasyOCR
-    result = reader.readtext(screenshot, detail=1)
-    return result
+# def get_all_text_on_screen():
+#     # Take a screenshot
+#     screenshot = pyautogui.screenshot()
+#
+#     # Convert the PIL Image to OpenCV format (numpy array)
+#     screenshot = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+#
+#     # Initialize EasyOCR reader
+#     reader = easyocr.Reader(['en'], gpu=True)
+#
+#     # Perform OCR using EasyOCR
+#     result = reader.readtext(screenshot, detail=1)
+#     return result
 
 
 def hibernate():
@@ -216,3 +192,20 @@ def close_game(executable):
         print(exception)
         print("Something went wrong when trying to close the game")
 
+
+def launch_game(game_launcher, game_url):
+    """
+    Starts Squad by telling steam to start it. Better solution than straight up starting the squad launcher
+    :return:
+    """
+    try:
+        subprocess.run(f'start {game_url}', shell=True)
+    except Exception:
+        # I added this as a backup incase the gamestart call to steam would not work.
+        try:
+            subprocess.run(game_launcher)
+        except Exception as error:
+            print(error)
+            print('Something went wrong when trying to start the game')
+            print('Make sure that your set path to the game is set correctly in the "seedingconfig.ini" file')
+            print('Another possibility might be that the game is already running')

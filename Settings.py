@@ -1,32 +1,36 @@
-import configparser
-import json
 import logging
-import os
+from configparser import ConfigParser
+from json import load, dump
+from os import path, environ
 from collections import OrderedDict
-from enum import Enum, StrEnum, auto
+from enum import StrEnum, auto
 from pathlib import Path
 from shutil import copyfile
+
+logging_level = logging.INFO
+logging.basicConfig(level=logging_level)
+
 
 VALUE_KEY = 'value'
 DESCRIPTION_KEY = 'description'
 
 # Path globals
 __VERSION__ = "3.1.0"
-LOCAL_APPDATA = os.environ.get('LOCALAPPDATA')
+LOCAL_APPDATA = environ.get('LOCALAPPDATA')
 SCRIPT_CONFIG_SETTINGS_FOLDER = Path(LOCAL_APPDATA) / 'SeedingScript'
 SCRIPT_CONFIG_SETTINGS_FILE = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / 'seedingconfig.json'
 GAME_CONFIG_PATH = Path(LOCAL_APPDATA) / 'SquadGame/Saved/Config/WindowsNoEditor'
 
 ICONS_FOLDER_NAME = 'icons'
 ICONS_PATH_PERMANENT = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / ICONS_FOLDER_NAME
-ICONS_PATH_LOCAL = Path(os.path.dirname(os.path.realpath(__file__))) / ICONS_FOLDER_NAME
+ICONS_PATH_LOCAL = Path(path.dirname(path.realpath(__file__))) / ICONS_FOLDER_NAME
 
-programfiles_32 = os.environ.get("ProgramFiles(x86)")
-programfiles_64 = os.environ.get('ProgramW6432')
-game_config_path = os.path.abspath(f"{LOCAL_APPDATA}/SquadGame/Saved/Config/WindowsNoEditor")
+programfiles_32 = environ.get("ProgramFiles(x86)")
+programfiles_64 = environ.get('ProgramW6432')
+game_config_path = path.abspath(f"{LOCAL_APPDATA}/SquadGame/Saved/Config/WindowsNoEditor")
 game_launcher_path_32 = f'{programfiles_32}/Steam/steamapps/common/Squad/squad_launcher.exe'
 game_launcher_path_64 = f'{programfiles_64}/Steam/steamapps/common/Squad/squad_launcher.exe'
-game_launcher_path = game_launcher_path_32 if os.path.exists(game_launcher_path_32) else game_launcher_path_64
+game_launcher_path = game_launcher_path_32 if path.exists(game_launcher_path_32) else game_launcher_path_64
 
 
 class ConfigKeys(StrEnum):
@@ -75,17 +79,18 @@ class ScriptConfigFile:
 
     def save_settings(self):
         with open(self.config_path, 'w') as f:
-            json.dump(self._config, f, indent=4)
+            dump(self._config, f, indent=4)
         return
 
     def load_settings(self):
         with open(self.config_path, 'r') as f:
-            config_file_json = json.load(f)
+            config_file_json = load(f)
         return config_file_json
 
     def reset_to_defaults(self):
         self._config = initial_config()
         self.save_settings()
+
 
 class UserActions(StrEnum):
     CLOSE = auto()
@@ -98,7 +103,7 @@ def generate_initial_config(path: Path):
     Careful, this not *not* check if the file already exists, and will overwrite.
     """
     with open(path, 'w') as f:
-        json.dump(initial_config(), f, indent=4)
+        dump(initial_config(), f, indent=4)
 
 
 def initial_config():
@@ -131,7 +136,7 @@ def initial_config():
         },
         ConfigKeys.SERVER_QUERY_PORT:
         {
-            VALUE_KEY: 27165,
+            VALUE_KEY: 27175,
             DESCRIPTION_KEY: 'The port the script will use to query the server'
         },
         ConfigKeys.SLEEP_INTERVAL_SECONDS:
@@ -226,30 +231,30 @@ def init_games_seeding_config():
     seeding_settings_swap_file = backup_path / 'GameUserSettingsSwapFile.ini'
     backup_config_file = backup_path / 'GameUserSettingsBackupOfOriginal.ini'
 
-    if not os.path.exists(backup_path):
+    if not path.exists(backup_path):
         try:
             backup_path.mkdir()
-            logging.info(f"Backup directory successfully initialized")
+            print(f"Backup directory successfully initialized")
         except FileExistsError:
-            logging.debug(f'The backup directory already exists.')
+            print(f'The backup directory already exists.')
             return
 
-        logging.debug(f'Copying file')
+        print(f'Copying file')
         copyfile(original_config_file, seeding_settings_swap_file)
 
-    if not os.path.exists(on_startup_file):
+    if not path.exists(on_startup_file):
         try:
             copyfile(original_config_file, on_startup_file)
         except FileExistsError:
             return
 
     # To allow keys to still have multiple values. Otherwise, the game's config file will break and not work.
-    seedingparser = configparser.ConfigParser(dict_type=MultiOrderedDict, strict=False)
-    seedingparser.optionxform = str
-    seedingparser.read(seeding_settings_swap_file)
+    parser = ConfigParser(dict_type=MultiOrderedDict, strict=False)
+    parser.optionxform = str
+    parser.read(seeding_settings_swap_file)
     # Initiates the basic settings for the game's config file.
     # All 4 sections below are required to change resolution before the game starts.
-    mainsection = seedingparser['/Script/Squad.SQGameUserSettings']
+    mainsection = parser['/Script/Squad.SQGameUserSettings']
     mainsection['ResolutionSizeX'] = "1280"
     mainsection['ResolutionSizeY'] = "720"
     mainsection['LastUserConfirmedResolutionSizeX'] = "1280"
@@ -261,13 +266,17 @@ def init_games_seeding_config():
     mainsection['MenuFrameRateLimit'] = '50.000000'
     mainsection['FrameRateLimit'] = "20.000000"
     mainsection['MasterVolume'] = "0.00000"
-    mainsection['ScreenPercentage'] = "75"  # The screen resolution scaling in percent.
-    with open(seeding_settings_swap_file, "w") as writefile:
-        seedingparser.write(writefile)
+    mainsection['ScreenPercentage'] = "(Value=50)"  # The screen resolution scaling in percent.
+    mainsection['PostFX_Brightness'] = "0.900000"
+    mainsection['FilterMaxPing'] = "500"
 
-    if not os.path.exists(on_startup_file):
+
+    with open(seeding_settings_swap_file, "w") as writefile:
+        parser.write(writefile)
+
+    if not path.exists(on_startup_file):
         copyfile(original_config_file, on_startup_file)
-    if not os.path.exists(backup_config_file):
+    if not path.exists(backup_config_file):
         copyfile(original_config_file, backup_config_file)
 
     return True
@@ -288,10 +297,6 @@ class MultiOrderedDict(OrderedDict):
 
 def main():
     # Ensure that all the keys of the configkeys are in the config file
-
-
-
-
 
     pass
 

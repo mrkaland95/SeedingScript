@@ -1,10 +1,10 @@
 import multiprocessing
 import sys
-import time
+
 import PySimpleGUI as sg
-import Main as app
-from Settings import ConfigKeys, ScriptConfigFile, LOCAL_APPDATA, SCRIPT_CONFIG_SETTINGS_FILE
+import main as app
 from copy import deepcopy
+from settings import ConfigKeys, ScriptConfigFile, LOCAL_APPDATA, SCRIPT_CONFIG_SETTINGS_FILE
 
 # TODO Add a button to the settings page that will open the backup settings for the config files.
 # To open a folder from the command line, use the "start" command, and then the path to the folder.
@@ -14,13 +14,12 @@ DEFAULT_GUI_FONT = ('helvetica', 15)
 
 
 def user_action_window(config: ScriptConfigFile,
-                        window_theme: str = DEFAULT_WINDOW_THEME,
+                       window_theme: str = DEFAULT_WINDOW_THEME,
                        element_font: tuple[str, int] = DEFAULT_GUI_FONT):
     """
     The window for choosing
     :return:
     """
-
 
     sg.theme(window_theme)
     close_game_key = '-CLOSE_GAME-'
@@ -52,7 +51,6 @@ def user_action_window(config: ScriptConfigFile,
             '-SHUTDOWN-': 'shutdown'
         }
 
-    seeding_process = None
     while True:
         event, values = window.Read(timeout=100)
         if event in ('Exit', sg.WIN_CLOSED):
@@ -61,18 +59,118 @@ def user_action_window(config: ScriptConfigFile,
         elif app.PROGRAM_SHUTDOWN:
             break
 
-        elif not seeding_process:
+        elif not app.SEEDING_PROCESS:
             if event in user_actions:
                 desired_useraction = user_actions[event]
-                seeding_process = multiprocessing.Process(target=app.seeding_pipeline, daemon=True,
+                app.SEEDING_PROCESS = multiprocessing.Process(target=app.seeding_pipeline, daemon=True,
                                                           kwargs={'user_action': desired_useraction, 'config': config})
-                seeding_process.name = 'seeding_process'
-                seeding_process.start()
-                if not seeding_process.is_alive():
-                    seeding_process = None
-                time.sleep(0.1)
+                app.SEEDING_PROCESS.name = 'seeding_process'
+                app.SEEDING_PROCESS.start()
+                if not app.SEEDING_PROCESS.is_alive():
+                    app.SEEDING_PROCESS = None
                 break
+
     window.close()
+
+
+def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
+                element_font: tuple[str, int] = DEFAULT_GUI_FONT):
+    """
+    Creates an instance of the start_seedingscript_remote window. Everything else is launched from this in sub-windows.
+    :return:
+    """
+    # global SeedingScriptMain
+    sg.theme(window_theme)
+
+    config = ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+
+    open_settings_window_key = 'Open'
+    help_window_key = 'Help'
+    stop_seeding_key = '-STOP_SEEDING-'
+    start_seedingscript_key = '-LAUNCH-SCRIPT-'
+    restore_settings_key = '-RESTORE_SETTINGS-'
+
+    menu_def = [['Settings', [f'&{open_settings_window_key}']], ['Help', [f'&{help_window_key}']]]
+    right_col = [sg.Column([
+        # TODO Fill in graph code here
+        #
+        #
+        #
+
+        #
+    ])]
+
+    left_col = [sg.Column([
+        [sg.Text('SeedingScript Output', font=('Helvetica', 16))],
+        [sg.MLine(size=(30, 40),
+                  key='-ML-',
+                  text_color='WHITE',
+                  disabled=True,
+                  autoscroll=True,
+                  reroute_stdout=True,
+                  reroute_stderr=True,
+                  echo_stdout_stderr=True,
+                  write_only=True)]
+    ])]
+
+    top_row = [
+        sg.Button('Start SeedingScript', key=start_seedingscript_key, font=('helvetica', 16),
+                  auto_size_button=True),
+        sg.Button('Restore last used settings', key=restore_settings_key, font=('helvetica', 16),
+                  auto_size_button=True, tooltip='Restores the settings that was '
+                                                 'stored before the last time seeding settings were applied'),
+        sg.Button('Stop Seeding Process', key=stop_seeding_key, font=('helvetica', 16),
+                  auto_size_button=True, enable_events=True),
+        sg.Button('Restore Original Settings')
+    ]
+    graph = []
+
+    layout = [
+        [sg.Menu(menu_def, tearoff=False)],
+        [top_row],
+        [left_col]
+    ]
+
+    window = sg.Window('SeedingScript', layout, font=('Helvetica', 16), resizable=True, size=(1300, 1000),
+                       finalize=True)
+
+    window.TKroot.minsize(1000, 1000)
+    window.TKroot.maxsize(1500, 1000)
+
+    while True:
+        event, values = window.read(timeout=150)
+
+        if event in ('Exit', sg.WIN_CLOSED):
+            app.PROGRAM_SHUTDOWN = True
+            break
+
+        elif event == restore_settings_key:
+            app.restore_last_used_settings(compare_settings=False)
+
+        elif event == open_settings_window_key:
+            settings_window(config=config)
+
+        # Only opens the action prompt if the seeding process is not already running.
+        elif event == start_seedingscript_key:
+            if not app.SEEDING_PROCESS:
+                user_action_window(config=config)
+
+        # Checks if the seeding_process variable is the initialized value,
+        # if not, it means that a process has been initialized,
+        # In which case the process will be killed, and reset to None.
+        # This makes it easy to check avoid launching multiple instances of the same process.
+        elif event == stop_seeding_key:
+            if not app.SEEDING_PROCESS:
+                print('No active seeding process.')
+                continue
+            if app.SEEDING_PROCESS.is_alive():
+                app.SEEDING_PROCESS.terminate()
+                app.SEEDING_PROCESS.join()
+                app.SEEDING_PROCESS = None
+                print('SeedingScript stopped')
+    # Frees up the resources used by the window once the while loop has been broken out of
+    window.close()
+    sys.exit()
 
 
 def settings_window(config: ScriptConfigFile,
@@ -166,7 +264,7 @@ def settings_window(config: ScriptConfigFile,
                            size=(5, 20),
                            default_value=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER),
                            key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER, enable_events=True)]],
-                            element_justification='center'),
+                      element_justification='center'),
 
              # Right bottom frame on the left main_seeding_loop frame.
              sg.Frame("", layout=[
@@ -235,7 +333,8 @@ def settings_window(config: ScriptConfigFile,
     layout = \
         [[sg.Text('Settings', font=('helvetica', 26))],
          [left_col, right_col],
-         [sg.Button('Save', key=save_key), sg.Button('Reset to defaults', key=default_key), sg.Button('Open Config file folder')]]
+         [sg.Button('Save', key=save_key), sg.Button('Reset to defaults', key=default_key),
+          sg.Button('Open Config file folder')]]
 
     window = sg.Window('SeedingScript settings', layout, font=('Helvetica', 16), resizable=True, finalize=True)
 
@@ -266,7 +365,6 @@ def settings_window(config: ScriptConfigFile,
                 except ValueError:
                     window.Element(event).Update(00)
 
-
         # upper_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER]
         # lower_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER]
         # if lower_value >= upper_value:
@@ -291,7 +389,6 @@ def settings_window(config: ScriptConfigFile,
             config.reset_to_defaults()
             # TODO add a way that all the GUI fields get updated when a reset happens.
 
-
             # for key in ConfigKeys:
             #     try:
             #         window.Element(key).Update(config.get(key))
@@ -302,75 +399,14 @@ def settings_window(config: ScriptConfigFile,
 
 
 def help_window():
-    pass
-
-
-
-def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
-                element_font: tuple[str, int] = DEFAULT_GUI_FONT):
-    """
-    Creates an instance of the start_seedingscript_remote window. Everything else is launched from this in sub-windows.
-    :return:
-    """
-    # global SeedingScriptMain
-    sg.theme(window_theme)
-
-
+    sg.theme(DEFAULT_WINDOW_THEME)
     config = ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
-
-
-    open_settings_window_key = 'Open'
-    stop_seeding_key = '-STOP_SEEDING-'
-    start_seedingscript_key = '-LAUNCH-SCRIPT-'
-    restore_settings_key = '-RESTORE_SETTINGS-'
-
-    menu_def = [['Settings', [f'&{open_settings_window_key}']]]
-    right_col = [sg.Column([
-        # TODO Fill in graph code here
-        #
-        #
-        #
-        #
-        #
-    ])]
-
-    left_col = [sg.Column([
-        [sg.Text('SeedingScript Output', font=('Helvetica', 16))],
-        [sg.MLine(size=(30, 40),
-                  key='-ML-',
-                  text_color='WHITE',
-                  disabled=True,
-                  autoscroll=True,
-                  reroute_stdout=True,
-                  reroute_stderr=True,
-                  echo_stdout_stderr=True,
-                  write_only=True)]
-    ])]
-
-    graph = []
-
     layout = [
-        [sg.Menu(menu_def, tearoff=False)],
-        [
-            sg.Button('Start SeedingScript', key=start_seedingscript_key, font=('helvetica', 16),
-                      auto_size_button=True),
-            sg.Button('Restore last used settings', key=restore_settings_key, font=('helvetica', 16),
-                      auto_size_button=True, tooltip='Restores the settings that was '
-                                                     'stored before the last time seeding settings were applied'),
-            sg.Button('Stop Seeding Process', key=stop_seeding_key, font=('helvetica', 16),
-                      auto_size_button=True),
-            sg.Button('Restore Original Settings')
 
-        ],
+    ]
 
-        left_col]
-
-    window = sg.Window('SeedingScript', layout, font=('Helvetica', 16), resizable=True, size=(1300, 1000),
-                       finalize=True)
-
-    window.TKroot.minsize(1000, 1000)
-    window.TKroot.maxsize(1500, 1000)
+    window = sg.Window('Help Window')
 
     while True:
         event, values = window.read(timeout=150)
@@ -379,32 +415,6 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
             app.PROGRAM_SHUTDOWN = True
             break
 
-        elif event == restore_settings_key:
-            app.restore_last_used_settings(compare_settings=False)
-
-        elif event == open_settings_window_key:
-            settings_window(config=config)
-
-        # Only opens the action prompt if the seeding process is not already running.
-        elif event == start_seedingscript_key:
-            if not app.SEEDING_PROCESS:
-                user_action_window(config=config)
-
-        # Checks if the seeding_process variable is the initialized value,
-        # if not, it means that a process has been initialized,
-        # In which case the process will be killed, and reset to None.
-        # This makes it easy to check avoid launching multiple instances of the same process.
-        elif event == stop_seeding_key:
-            if not app.SEEDING_PROCESS:
-                continue
-            if app.SEEDING_PROCESS.is_alive():
-                app.SEEDING_PROCESS.terminate()
-                app.SEEDING_PROCESS.join()
-                app.SEEDING_PROCESS = None
-                print('SeedingScript stopped')
-    # Frees up the resources used by the window once the while loop has been broken out of
-    window.close()
-    sys.exit()
 
 
 def save_prompt(window_theme: str = DEFAULT_WINDOW_THEME,
@@ -432,3 +442,11 @@ def save_prompt(window_theme: str = DEFAULT_WINDOW_THEME,
 
         elif event == no_key:
             pass
+
+
+def test():
+    main_window(DEFAULT_WINDOW_THEME)
+
+
+if __name__ == '__main__':
+    test()

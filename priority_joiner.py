@@ -1,11 +1,13 @@
 import datetime
-import json
 import enum
-import subprocess
+import json
 import os
+import subprocess
 import time
+
 import a2s
 import psutil
+
 
 # This is intended for Flax' personal use, experimental script to join the server on my secondary devices if the server dips below a certain threshold
 # And within a specified timeframe.
@@ -61,7 +63,6 @@ class SquadServer:
             print(err)
             print('The connection to the server timed out')
             return 0
-
 
 
 def kill_process_by_name(process_name: str = None, process: psutil.Process = None):
@@ -192,7 +193,6 @@ def player_in_server(ip, query_port, player) -> bool:
             print(err)
             timeout_buffer += 1
 
-
     for m_player in server_players:
         if player.lower() in m_player.name.lower():
             return True
@@ -220,12 +220,11 @@ def init_json_config(config_path):
     }
 
     with open(config_path, 'w') as f:
-        json.dump(config, f,  indent=4)
+        json.dump(config, f, indent=4)
 
 
 def get_server_to_join():
     pass
-
 
 
 def main():
@@ -245,18 +244,15 @@ def main():
 
     # Creates the server objects
     theCage = SquadServer('TheCage', 'TheCage_SeedingScript.py', CONFIG_PATH_CAGE)
-    tacTrig = SquadServer('TacticalTriggernometry', 'Main.py', CONFIG_PATH_TRIG)
+    tacTrig = SquadServer('TacticalTriggernometry', 'main.py', CONFIG_PATH_TRIG)
 
     priority_to_server_map = {
         1: theCage,
         2: tacTrig,
     }
 
-
     timeout = 0
     timeout_limit = 240 // QUERY_INTERVAL_SECONDS
-
-
 
     # Decided to use an infinite loop, instead of something like "while correct_time" since that would
     # Jump out of the loop once it's the wrong time and not run again.
@@ -267,7 +263,6 @@ def main():
         #     print('Not in correct time')
         #     time.sleep(QUERY_INTERVAL_SECONDS)
         #     continue
-
 
         priority_level = 1  # Lower number is higher priority.
         for m_srv in priority_to_server_map:
@@ -302,7 +297,5 @@ def main():
         time.sleep(QUERY_INTERVAL_SECONDS)
 
 
-
 if __name__ == '__main__':
     main()
-

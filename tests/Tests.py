@@ -1,28 +1,28 @@
 import unittest
 
-import a2s
-
-import GUI as gui
-import Main as app
-import Settings as cnfg
+import GUI
+import autojoin
+import settings as cnfg
 import utils
-from utils import get_location_of_single_string_on_screen
+from autojoin import find_string_on_screen_from_results
 
 config = cnfg.ScriptConfigFile(cnfg.SCRIPT_CONFIG_SETTINGS_FILE)
+
 
 class TestGUI(unittest.TestCase):
     """
     This test case is just used to check what the gui windows look like.
     Graphical tests
     """
+
     def test_settings_window(self):
-        gui.settings_window(config=config)
+        GUI.settings_window(config=config)
 
     def test_main_window(self):
-        gui.main_window()
+        GUI.main_window()
 
     def test_user_action_window(self):
-        gui.user_action_window()
+        GUI.user_action_window(config)
 
 
 class TestOCR(unittest.TestCase):
@@ -31,18 +31,29 @@ class TestOCR(unittest.TestCase):
         This will fail if the method is not visible. A bit of a dumb test.
         """
         string = 'testocr'
-        x, y = get_location_of_single_string_on_screen(string)
+        x, y = find_string_on_screen_from_results(string)
         self.assertIsNotNone(x)
         self.assertIsNotNone(y)
 
 
+    def test_get_all_text_on_screen(self):
+        result = autojoin.get_all_text_live()
+        print(result)
+
+    def test_find_current_state(self):
+        res = autojoin.get_all_text_live()
+        res = autojoin.get_current_state(res)
+
+    def test_find_match(self):
+        result = autojoin.get_all_text_live()
+        test = find_string_on_screen_from_results('find match', result)
+
+
+
 class TestAutojoin(unittest.TestCase):
     def testAutojoin(self):
-
         # Temp
         pass
-
-
 
 
 class TestUtils(unittest.TestCase):
