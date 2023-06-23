@@ -1,4 +1,6 @@
+import argparse
 import logging
+import multiprocessing
 import os
 import sys
 import datetime
@@ -8,7 +10,6 @@ import random
 import shutil
 import threading
 import time
-import pathlib
 import keyboard
 import pyautogui
 import GUI
@@ -16,16 +17,15 @@ import settings
 import utils
 import autojoin
 
-from settings import ConfigKeys
+from pathlib import Path
+from settings import ConfigKeys, LOGGING_LEVEL
 from utils import hibernate, close_game, launch_game
 
-logging_level = logging.INFO
-logging.basicConfig(level=logging_level)
-
+logging.basicConfig(level=LOGGING_LEVEL)
 # Path globals
 
 
-LOCAL_APPDATA = pathlib.Path(os.environ.get('LOCALAPPDATA'))
+LOCAL_APPDATA = Path(os.environ.get('LOCALAPPDATA'))
 SCRIPT_CONFIG_SETTINGS_FOLDER = LOCAL_APPDATA / 'SeedingScript'
 SCRIPT_CONFIG_SETTINGS_FILE = SCRIPT_CONFIG_SETTINGS_FOLDER / 'seedingconfig.json'
 GAME_CONFIG_PATH = LOCAL_APPDATA / 'SquadGame/Saved/Config/WindowsNoEditor'
@@ -45,10 +45,13 @@ SAMPLES = 100
 SAMPLE_MAX = 100
 CANVAS_SIZE = (400, 800)
 LABEL_SIZE = (400, 20)
+QUEUE = multiprocessing.Queue()
+
 
 # TODO implement the graph system.
 pt_time = []
 pt_player_numbers = []
+
 
 ##############################################################################################
 # Global bools
@@ -79,7 +82,7 @@ CURRENT_STATE = None
 # TODO 1 - Graph that charts the player count over time.
 
 
-def perform_game_launch(config: settings.ScriptConfigFile = None, delay_from_game_launch: int = 60):
+def perform_game_launch(config: settings.ScriptConfigFile = None):
     """
     Initializes launch of the game and applies lightweight settings, if applicable.
     Checks if it's already running before attempting to start.
@@ -87,9 +90,6 @@ def perform_game_launch(config: settings.ScriptConfigFile = None, delay_from_gam
     :return:
     """
     global GAME_STARTED_BY_SCRIPT
-
-    if not config:
-        config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
     lightweight_seeding_settings_enabled = config.get(ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED)
     game_executable = config.get(ConfigKeys.GAME_EXECUTABLE_NAME)
@@ -107,28 +107,27 @@ def perform_game_launch(config: settings.ScriptConfigFile = None, delay_from_gam
 
     launch_game(squad_install, game_url)
     GAME_STARTED_BY_SCRIPT = True
-    time.sleep(delay_from_game_launch)
     return True
 
 
-def check_seeding_settings(config: settings.ScriptConfigFile, compare_config: bool = True):
+def check_seeding_settings(config: settings.ScriptConfigFile,
+                           compare_config: bool = True):
     """
     Applies the lightweight seeding settings to the squad's config folder when called.
     :param:
     :return:
     """
 
-    # if not config:
-    #     config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+
     game_config_path = config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH)
     lightweight_settings_applied = config.get(ConfigKeys.LIGHTWEIGHT_SETTINGS_CURRENTLY_APPLIED)
 
-    original_path = os.path.abspath(game_config_path)
-    backup_folder_path = os.path.abspath(f'{original_path}\\Backup')
-    backup_in_script_config = os.path.abspath(f'{SCRIPT_CONFIG_SETTINGS_FOLDER}\\GameUserSettingsLastUsed.ini')
-    current_config = os.path.abspath(f'{original_path}\\GameUserSettings.ini')
-    backup_config_file = os.path.abspath(f'{backup_folder_path}\\GameUserSettingsLastUsed.ini')
-    swap_config_file = os.path.abspath(f'{backup_folder_path}\\GameUserSettingsSwapFile.ini')
+    original_path = Path(game_config_path)
+    backup_folder_path = Path(f'{original_path}\\Backup')
+    backup_in_script_config = Path(f'{SCRIPT_CONFIG_SETTINGS_FOLDER}\\GameUserSettingsLastUsed.ini')
+    current_config = Path(f'{original_path}\\GameUserSettings.ini')
+    backup_config_file = Path(f'{backup_folder_path}\\GameUserSettingsLastUsed.ini')
+    swap_config_file = Path(f'{backup_folder_path}\\GameUserSettingsSwapFile.ini')
     # swap_config_file = str(swap_config_file)
     # on_startup_file = str(on_startup_file)
     # compare_config:
@@ -150,34 +149,78 @@ def check_seeding_settings(config: settings.ScriptConfigFile, compare_config: bo
 
     print("Lightweight seeding settings applied")
 
-
 # TODO Make sure the user config settings will be restored properly at all points
 
-def restore_last_used_settings(config: settings.ScriptConfigFile = None,
-                               compare_settings: bool = True,
-                               restore_delay: bool = False):
+# def restore_last_used_settings(config: settings.ScriptConfigFile = None,
+#                                compare_settings: bool = True,
+#                                restore_delay: bool = False):
+#     """
+#     Restores user's original config file to the game when called
+#     :return:
+#     """
+#     # Loads the config object to get needed settings.
+#     if not config:
+#         config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+#
+#     game_config_path_inner = Path(config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH))
+#
+#     backup_path = Path(game_config_path_inner) / 'Backup'
+#     current_active_config_file = game_config_path_inner / 'GameUserSettings.ini'
+#     last_used_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
+#     swap_file = os.path.abspath(f'{backup_path}\GameUserSettingsSwapFile.ini')
+#     cmp_swap_to_current = filecmp.cmp(swap_file, current_active_config_file)
+#
+#     """
+#     Beacuse the files are being loaded and changed when squad launches,
+#     We may need to have a delay before restoring the game's settings, otherwise they will just be overwritten by the game.
+#     """
+#     if restore_delay:
+#         time.sleep(60)
+#
+#     try:
+#         shutil.copyfile(last_used_config_file, current_active_config_file)
+#     except Exception as err:
+#         print(err)
+#
+#     if filecmp.cmp(last_used_config_file, current_active_config_file):
+#         config.set(ConfigKeys.LIGHTWEIGHT_SETTINGS_CURRENTLY_APPLIED, False)
+#         config.save_settings()
+#         print('Last used settings have been restored\n')
+#         return True
+#
+#     elif not filecmp.cmp(last_used_config_file, current_active_config_file):
+#         print('Original settings were already in place\n')
+#         return False
+
+
+
+def restore_with_delay(config: settings.ScriptConfigFile, delay: float):
+    time.sleep(delay)
+    restore_last_used_settings(config)
+
+
+def restore_last_used_settings(config: settings.ScriptConfigFile,
+                               compare_settings: bool = True):
     """
     Restores user's original config file to the game when called
     :return:
     """
     # Loads the config object to get needed settings.
-    if not config:
-        config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
 
-    game_config_path_inner = pathlib.Path(config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH))
-
-    backup_path = pathlib.Path(game_config_path_inner) / 'Backup'
+    game_config_path_inner = Path(config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH))
+    backup_path = Path(game_config_path_inner) / 'Backup'
     current_active_config_file = game_config_path_inner / 'GameUserSettings.ini'
-    last_used_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
-    swap_file = os.path.abspath(f'{backup_path}\GameUserSettingsSwapFile.ini')
+
+    last_used_config_file = Path(backup_path) / 'GameUserSettingsLastUsed.ini'
+    # last_used_config_file = os.path.abspath(f'{backup_path}\GameUserSettingsLastUsed.ini')
+
+    swap_file = backup_path / 'GameUserSettingsSwapFile.ini'
     cmp_swap_to_current = filecmp.cmp(swap_file, current_active_config_file)
 
     """
     Beacuse the files are being loaded and changed when squad launches,
     We may need to have a delay before restoring the game's settings, otherwise they will just be overwritten by the game.
     """
-    if restore_delay:
-        time.sleep(60)
 
     try:
         shutil.copyfile(last_used_config_file, current_active_config_file)
@@ -193,6 +236,12 @@ def restore_last_used_settings(config: settings.ScriptConfigFile = None,
     elif not filecmp.cmp(last_used_config_file, current_active_config_file):
         print('Original settings were already in place\n')
         return False
+
+
+
+
+
+
 
 
 def restore_last_used_settings_plain(config: settings.ScriptConfigFile):
@@ -232,8 +281,8 @@ def restore_original_settings(game_config_path):
 
     #
     # game_config_path = config.squad_game_config_path
-    backup_configs_path = pathlib.Path(game_config_path) / 'Backup'
-    current_active_config_file = pathlib.Path(game_config_path) / 'GameUserSettings.ini'
+    backup_configs_path = Path(game_config_path) / 'Backup'
+    current_active_config_file = Path(game_config_path) / 'GameUserSettings.ini'
     backup_config_file = os.path.abspath(f'{backup_configs_path}\GameUserSettingsBackupOfOriginal.ini')
     shutil.copyfile(backup_config_file, current_active_config_file)
 
@@ -308,6 +357,33 @@ def cmdline_argument_handler() -> None or str:
     return desired_userinput
 
 
+def cmdline_argument_handler_new():
+    """
+    Checks if there were any arguments supplied from the command line, if applicable
+    :return:
+    """
+    parser = argparse.ArgumentParser(description='Process command line arguments for the program')
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument("-close", action='store_const', const='close',
+                       help="The game will be closed upon hitting the threshold")
+    group.add_argument("-shutdown", action='store_const', const='shutdown',
+                       help="Your computer will shut down upon hitting the threshold")
+
+    parser.add_argument("-restorelast", action='store_true',
+                        help="Restore your last used settings and exit if the 'seeding_settings_enabled' is set to true in the config file")
+
+    parser.add_argument("-thresh", type=int, metavar='N',
+                        help="Override the seeding threshold and seeding_random setting from the config file")
+
+    args = parser.parse_args()
+
+    if args.restorelast:
+        restore_last_used_settings()
+        sys.exit()
+
+    return args.close or args.shutdown
+
+
 def watch_for_interrupt():
     global PROGRAM_SHUTDOWN
     PROGRAM_SHUTDOWN = False
@@ -328,11 +404,8 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
     game_started_by_script = False
     player_threshold_hit = False
     perform_main_seeding_loop = True
-    perform_main_seeding_loop = True
-
 
     server_address = (config.get(ConfigKeys.SERVER_IP), int(config.get(ConfigKeys.SERVER_QUERY_PORT)))
-    attempt_autojoin_if_already_ingame = config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME)
     should_attempt_to_autojoin = config.get(ConfigKeys.JOIN_SERVER_AUTOMATICALLY_ENABLED)
     close_script_if_game_has_closed = config.get(ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED)
     game_executable = config.get(ConfigKeys.GAME_EXECUTABLE_NAME)
@@ -348,10 +421,13 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
     game_launched = perform_game_launch()
 
-    should_attempt_to_autojoin = False
+    if game_launched:
+        game_started_by_script = True
 
     if game_launched and should_attempt_to_autojoin:
-        autojoin.autojoin_wrapper(config, game_started_by_script)
+        # Delay from when the game was started
+        time.sleep(config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS))
+        autojoin.perform_autojoin(config, game_started_by_script)
 
     if not perform_main_seeding_loop:
         return
@@ -360,8 +436,6 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
     # Main seeding loop.
     while not player_threshold_hit:
-        now = datetime.datetime.now()
-        current_hour_min = now.strftime("%H:%M")
         if close_script_if_game_has_closed:
             if not utils.process_running(game_executable):
                 if game_started_by_script:
@@ -371,7 +445,10 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
         # TODO add handling for whatever needs to happen if the player count is none.
         current_player_count = utils.get_current_playercount(server_address)
+
         if current_player_count is not None:
+            now = datetime.datetime.now()
+            current_hour_min = now.strftime("%H:%M")
             pt_player_numbers.append(current_player_count)
             pt_time.append(current_hour_min)
             print(f" {current_hour_min}  -- There are currently {current_player_count} players on the server\n")
@@ -384,28 +461,31 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
     if user_action == 'hibernate':
         if not game_started_by_script:  # Restores back to original settings if the game wasn't already started
-            restore_last_used_settings()
+            restore_last_used_settings(config)
             print('Settings have been restored.')
         close_game(game_executable)
         hibernate()
-        exit()
+        sys.exit()
 
     elif user_action == 'shutdown':
-        utils.shutdown()
-        exit()
+        utils.shutdown_computer()
+        sys.exit()
     else:
         # Assumes close the game for anything else.
         close_game(game_executable)
-        restore_if_started_by_script(game_started_by_script)
+        restore_if_started_by_script(config, game_started_by_script)
 
 
-def restore_if_started_by_script(game_started_by_script):
+def restore_if_started_by_script(config: settings.ScriptConfigFile, game_started_by_script: bool):
     if game_started_by_script:
-        restore_last_used_settings(compare_settings=False)
+        restore_last_used_settings(config, compare_settings=False)
         print('Game closed. Settings have been restored. Shutting down script.\n')
     else:
         print('Game have been closed. Shutting down script\n')
 
+
+def start_seeding_process():
+    pass
 
 def main():
     """

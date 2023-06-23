@@ -163,6 +163,7 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
             if not app.SEEDING_PROCESS:
                 print('No active seeding process.')
                 continue
+
             if app.SEEDING_PROCESS.is_alive():
                 app.SEEDING_PROCESS.terminate()
                 app.SEEDING_PROCESS.join()

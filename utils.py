@@ -18,7 +18,6 @@ def player_in_server(server_address: tuple[str, int], name: str) -> bool:
                 in_server = True
                 break
 
-        print(server_players)
     except Exception as err:
         print(err)
 
@@ -46,7 +45,7 @@ def get_current_playercount(server_address: tuple[str, int], timeout: float = 3.
     return len(players_in_server)
 
 
-def shutdown():
+def shutdown_computer():
     """
     Performs a full shutdown of the computer.
     """

@@ -7,8 +7,9 @@ from enum import StrEnum, auto
 from pathlib import Path
 from shutil import copyfile
 
-logging_level = logging.INFO
-logging.basicConfig(level=logging_level)
+
+LOGGING_LEVEL = logging.INFO
+logging.basicConfig(level=LOGGING_LEVEL)
 
 
 VALUE_KEY = 'value'
