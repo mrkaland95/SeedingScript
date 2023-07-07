@@ -1,37 +1,62 @@
 import logging
+import multiprocessing
+import shutil
 from configparser import ConfigParser
 from json import load, dump
 from os import path, environ
 from collections import OrderedDict
 from enum import StrEnum, auto
 from pathlib import Path
-from shutil import copyfile
 
+import pyautogui
 
-LOGGING_LEVEL = logging.INFO
-logging.basicConfig(level=LOGGING_LEVEL)
+from utils import printf
 
-
+# used to store the "keys" in the JSON config file.
 VALUE_KEY = 'value'
 DESCRIPTION_KEY = 'description'
 
 # Path globals
 __VERSION__ = "3.1.0"
-LOCAL_APPDATA = environ.get('LOCALAPPDATA')
+LOCAL_APPDATA = Path(environ.get('LOCALAPPDATA'))
 SCRIPT_CONFIG_SETTINGS_FOLDER = Path(LOCAL_APPDATA) / 'SeedingScript'
 SCRIPT_CONFIG_SETTINGS_FILE = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / 'seedingconfig.json'
 GAME_CONFIG_PATH = Path(LOCAL_APPDATA) / 'SquadGame/Saved/Config/WindowsNoEditor'
 
-ICONS_FOLDER_NAME = 'icons'
-ICONS_PATH_PERMANENT = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / ICONS_FOLDER_NAME
-ICONS_PATH_LOCAL = Path(path.dirname(path.realpath(__file__))) / ICONS_FOLDER_NAME
+programfiles_32 = Path(environ.get("ProgramFiles(x86)"))
+programfiles_64 = Path(environ.get('ProgramW6432'))
+# game_config_path = os.path.abspath(f"{LOCAL_APPDATA}/SquadGame/Saved/Config/WindowsNoEditor")
+game_config_path = LOCAL_APPDATA / "SquadGame/Saved/Config/WindowsNoEditor"
 
-programfiles_32 = environ.get("ProgramFiles(x86)")
-programfiles_64 = environ.get('ProgramW6432')
-game_config_path = path.abspath(f"{LOCAL_APPDATA}/SquadGame/Saved/Config/WindowsNoEditor")
-game_launcher_path_32 = f'{programfiles_32}/Steam/steamapps/common/Squad/squad_launcher.exe'
-game_launcher_path_64 = f'{programfiles_64}/Steam/steamapps/common/Squad/squad_launcher.exe'
-game_launcher_path = game_launcher_path_32 if path.exists(game_launcher_path_32) else game_launcher_path_64
+
+# game_launcher_path_32 = f'{programfiles_32}/Steam/steamapps/common/Squad/squad_launcher.exe'
+game_launcher_path_32 = programfiles_32 / 'Steam/steamapps/common/Squad/squad_launcher.exe'
+game_launcher_path_64 = programfiles_64 / 'Steam/steamapps/common/Squad/squad_launcher.exe'
+game_launcher_path = game_launcher_path_32 if game_launcher_path_32.exists() else game_launcher_path_64
+
+LOGGING_LEVEL = logging.DEBUG
+# LOGGING_LEVEL = logging.INFO
+# logging.basicConfig(level=LOGGING_LEVEL)
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(level=LOGGING_LEVEL)
+
+
+GUI_WINDOW_THEME = 'DarkGrey14'
+GUI_FONT = ('helvetica', 15)
+
+SAMPLES = 100
+SAMPLE_MAX = 100
+CANVAS_SIZE = (400, 800)
+LABEL_SIZE = (400, 20)
+
+SEEDING_PROCESS = None
+PLAYER_COUNT_ON_SERVER = None
+pyautogui.FAILSAFE = False
+PROGRAM_SHUTDOWN = False
+CURRENT_STATE = None
+
+QUEUE = multiprocessing.Queue()
+
 
 
 class ConfigKeys(StrEnum):
@@ -60,17 +85,37 @@ class ConfigKeys(StrEnum):
 
 
 class ScriptConfigFile:
-    def __init__(self, config_path: Path):
-        self.config_path: Path = config_path
+    def __init__(self, config_file_path: Path):
+        """
+        Class meant to represent and store the various values that will be used by the seeding script.
+        Loads and saves these settings to a JSON file.
+        @param config_file_path: The path to the JSON file.
+        """
+        self.config_path: Path = config_file_path
         self._config: dict = self.load_settings()
 
     def __eq__(self, other):
+        """
+
+        @param other:
+        @return:
+        """
         if isinstance(other, ScriptConfigFile):
             return self._config == other._config
         return False
 
     def get(self, key: ConfigKeys):
-        return self._config.get(key.value, {}).get(VALUE_KEY, None)
+        if not isinstance(key, ConfigKeys):
+            raise AttributeError(f'The given key is not a valid entry in the config file\n'
+                                 f'key: {key}')
+        try:
+            return self._config.get(key.value, {}).get(VALUE_KEY, None)
+        except AttributeError:
+            raise AttributeError(f"The attribute of {key} doesen't exist in the config file. This is likely because flax is a dumbass and "
+                                 f"forgot to add it.")
+
+    def get_server_address(self) -> tuple[str, int]:
+        return self.get(ConfigKeys.SERVER_IP), int(self.get(ConfigKeys.SERVER_QUERY_PORT))
 
     def set(self, key: ConfigKeys, value):
         if key.value in self._config:
@@ -79,6 +124,7 @@ class ScriptConfigFile:
             self._config[key.value] = {VALUE_KEY: value}
 
     def save_settings(self):
+        print(f'Saving settings to path: {self.config_path}')
         with open(self.config_path, 'w') as f:
             dump(self._config, f, indent=4)
         return
@@ -99,11 +145,11 @@ class UserActions(StrEnum):
     HIBERNATE = auto()
 
 
-def generate_initial_config(path: Path):
+def generate_initial_config(file_path: Path):
     """
     Careful, this not *not* check if the file already exists, and will overwrite.
     """
-    with open(path, 'w') as f:
+    with open(file_path, 'w') as f:
         dump(initial_config(), f, indent=4)
 
 
@@ -123,7 +169,8 @@ def initial_config():
         ConfigKeys.PLAYER_THRESHOLD:
         {
             VALUE_KEY: 60,
-            DESCRIPTION_KEY: 'The threshold that the desired user action will be taken. Overriden by the "Seeding Random" parameter, if enabled'
+            DESCRIPTION_KEY: 'The threshold that the desired user action will be taken. Overriden by the "Seeding Random" parameter, '
+                             'if enabled'
         },
         ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER:
         {
@@ -148,7 +195,8 @@ def initial_config():
         ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED:
         {
             VALUE_KEY: True,
-            DESCRIPTION_KEY: 'Whether script will utilise a random seeding threshold between the specified upper and lower bounds. On by default'
+            DESCRIPTION_KEY: 'Whether script will utilise a random seeding threshold between the specified upper and lower bounds. On by '
+                             'default'
         },
         ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER:
         {
@@ -235,24 +283,40 @@ def init_games_seeding_config():
     if not path.exists(backup_path):
         try:
             backup_path.mkdir()
-            print(f"Backup directory successfully initialized")
+            printf(f"Backup directory successfully initialized")
         except FileExistsError:
-            print(f'The backup directory already exists.')
-            return
+            printf(f'The backup directory already exists.')
 
-        print(f'Copying file')
-        copyfile(original_config_file, seeding_settings_swap_file)
+        printf(f'Copying file')
+        shutil.copyfile(original_config_file, seeding_settings_swap_file)
 
     if not path.exists(on_startup_file):
         try:
-            copyfile(original_config_file, on_startup_file)
+            shutil.copyfile(original_config_file, on_startup_file)
         except FileExistsError:
             return
 
+    initialise_swap_file(seeding_settings_swap_file)
+
+    if not path.exists(on_startup_file):
+        shutil.copyfile(original_config_file, on_startup_file)
+    if not path.exists(backup_config_file):
+        shutil.copyfile(original_config_file, backup_config_file)
+
+    return True
+
+
+def initialise_swap_file(swap_file_path: Path):
+    """
+    Method to define and initialise the lightweight seeding swap file.
+    @param swap_file_path:
+    @return:
+    """
     # To allow keys to still have multiple values. Otherwise, the game's config file will break and not work.
     parser = ConfigParser(dict_type=MultiOrderedDict, strict=False)
     parser.optionxform = str
-    parser.read(seeding_settings_swap_file)
+    parser.read(swap_file_path)
+
     # Initiates the basic settings for the game's config file.
     # All 4 sections below are required to change resolution before the game starts.
     mainsection = parser['/Script/Squad.SQGameUserSettings']
@@ -270,22 +334,14 @@ def init_games_seeding_config():
     mainsection['ScreenPercentage'] = "(Value=50)"  # The screen resolution scaling in percent.
     mainsection['PostFX_Brightness'] = "0.900000"
     mainsection['FilterMaxPing'] = "500"
-
-
-    with open(seeding_settings_swap_file, "w") as writefile:
+    with open(swap_file_path, "w") as writefile:
         parser.write(writefile)
-
-    if not path.exists(on_startup_file):
-        copyfile(original_config_file, on_startup_file)
-    if not path.exists(backup_config_file):
-        copyfile(original_config_file, backup_config_file)
-
-    return True
+    return
 
 
 class MultiOrderedDict(OrderedDict):
     """
-    Required class to so it's possible to have multiple values per key in the game's config file,
+    Required class to, so it's possible to have multiple values per key in the game's config file,
     Since python otherwise does not support such functionality.
     """
 

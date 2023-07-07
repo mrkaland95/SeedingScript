@@ -1,6 +1,8 @@
 import logging
 import os
 import subprocess
+import a2s.exceptions
+import a2s
 import psutil
 import pyautogui
 import pythoncom
@@ -9,7 +11,12 @@ import win32gui
 from a2s import players
 
 
-def player_in_server(server_address: tuple[str, int], name: str) -> bool:
+
+def printf(string: str):
+    print(f'{string}\n')
+
+
+def player_in_server(server_address: tuple[str, int], name: str) -> bool | None:
     in_server = False
     try:
         server_players = players(server_address)
@@ -18,31 +25,63 @@ def player_in_server(server_address: tuple[str, int], name: str) -> bool:
                 in_server = True
                 break
 
+    except a2s.BufferExhaustedError:
+        printf('Bug in the a2s module when trying to fetch the player list.')
+        printf('For the time being there is no fix for this.')
+        in_server = None
+
     except Exception as err:
         print(err)
+        in_server = None
 
     return in_server
 
 
-def get_current_playercount(server_address: tuple[str, int], timeout: float = 3.0) -> int:
-    """
-    The amount of players that are actively loaded in to the server. Done this way since the attribute of a2s.players
-    includes players in queue.
-    :param: This is the address(IP and query port) of the server that will be queried.
-    :return: The player count.
-    """
-    players_in_server = []
+# def get_current_playercount(server_address: tuple[str, int], timeout: float = 3.0) -> int | None:
+#     """
+#     The amount of players that are actively loaded in to the server. Done this way since the attribute of a2s.players
+#     includes players in queue.
+#
+#     # THIS IS CURRENTLY BROKEN DUE TO A BUG AT HIGH PLAYERNUMBERS
+#
+#     :param: This is the address(IP and query port) of the server that will be queried.
+#     :return: The player count.
+#     """
+#     players_in_server = []
+#
+#     try:
+#         serverplayers = a2s.players(server_address, timeout=timeout)
+#         for player in serverplayers:
+#             if player.name != "":
+#                 players_in_server.append(player)
+#
+#     except a2s.exceptions.BufferExhaustedError:
+#         settings.LOGGER.warning('Buffer was exhausted')
+#         return None
+#     except Exception as err:
+#         logging.warning(err)
+#         return None
+#
+#     return len(players_in_server)
 
+
+def get_current_playercount(server_address: tuple[str, int], timeout: float = 5.0) -> int | None:
+    """
+    Version that queries the server for player count. Do note that the player count is slightly too high(for various reasons)
+
+    @param server_address:
+    @param timeout:
+    @return:
+    """
     try:
-        serverplayers = players(server_address, timeout=timeout)
-        for player in serverplayers:
-            if player.name != "":
-                players_in_server.append(player)
-    except Exception as err:
-        logging.warning(err)
+        players = a2s.info(server_address, timeout=timeout)
+        return players.player_count
+    except a2s.BufferExhaustedError as err:
+        print('There was a buffer exhausted error when attempting to retrieve the player count.')
         return None
 
-    return len(players_in_server)
+
+
 
 
 def shutdown_computer():
@@ -130,28 +169,25 @@ def get_screen_resolution() -> (int, int):
         return 1920, 1080
 
 
-def find_squad_hwnd():
+def find_window_hwnd(window_name_target: str = 'SquadGame'):
     """
-    Finds and returns the window handle for the squad client.
-    :return:
+    Finds and returns the window handle for a specified window.
+    :param window_name_target: The name of the window to find
+    :return: The handle of the found window, or None if not found
     """
-    # Necessary to work in a thread or child process.
     try:
         pythoncom.CoInitialize()
         windowlist = []
-
         def winEnumHandler(hwnd, ctx):
             window_name = str(win32gui.GetWindowText(hwnd))
-            if 'SquadGame' in window_name:
+            if window_name_target in window_name:
                 windowlist.append(hwnd)
 
         win32gui.EnumWindows(winEnumHandler, None)
-        squad_window_handle = windowlist[0]
-        return squad_window_handle
+        return windowlist[0] if windowlist else None
     except Exception as err:
         print(err)
-        # if verbose:
-        # print('The script was unable to find Squads window handle.')
+        return None
 
 
 # def get_all_text_on_screen():
@@ -179,18 +215,23 @@ def hibernate():
     os.system('shutdown /f /h')
 
 
-def close_game(executable):
+def close_process(executable):
     """
     Function that shuts down the game when the find_current_playercount reaches the critical threshold.
     :param executable: The game's executable name.
     """
     try:
-        print("Closing down the game")
-        os.system(f'TASKKILL /F /IM {executable}')
+        print("Closing down the process")
+        command = f'TASKKILL /F /IM {executable}'
+        # os.system(f'TASKKILL /F /IM {executable}')
+        res = subprocess.run(command, shell=True)
+        if res == 0:
+            return True
+        else:
+            return False
     except Exception as exception:
         print(exception)
         print("Something went wrong when trying to close the game")
-
 
 def launch_game(game_launcher, game_url):
     """
@@ -208,3 +249,25 @@ def launch_game(game_launcher, game_url):
             print('Something went wrong when trying to start the game')
             print('Make sure that your set path to the game is set correctly in the "seedingconfig.ini" file')
             print('Another possibility might be that the game is already running')
+
+
+def main():
+    ipaddress = '23.228.238.22'
+    port = 27175
+    address = (ipaddress, port)
+
+    result = a2s.info(address)
+    print(result.player_count)
+    # print(a2s.info(address))
+    # print(a2s.rules(address))
+
+
+    # print(a2s.players((ipaddress, port)))
+    # players = get_current_playercount((ipaddress, port))
+    # print(players)
+
+
+if __name__ == '__main__':
+
+
+    main()

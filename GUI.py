@@ -1,10 +1,16 @@
-import multiprocessing
+import subprocess
 import sys
+import threading
 
 import PySimpleGUI as sg
 import main as app
 from copy import deepcopy
-from settings import ConfigKeys, ScriptConfigFile, LOCAL_APPDATA, SCRIPT_CONFIG_SETTINGS_FILE
+
+import settings
+import utils
+from settings import ConfigKeys, ScriptConfigFile, LOCAL_APPDATA, SCRIPT_CONFIG_SETTINGS_FILE,\
+    programfiles_32, programfiles_64, game_launcher_path, game_config_path
+from utils import printf
 
 # TODO Add a button to the settings page that will open the backup settings for the config files.
 # To open a folder from the command line, use the "start" command, and then the path to the folder.
@@ -30,16 +36,18 @@ def user_action_window(config: ScriptConfigFile,
         [
             [sg.Text('Choose the action the script will take upon hitting the player threshold.')],
 
-            [sg.Button('Close Game', key=close_game_key, tooltip=
-            'This closes down the game upon reacing the player threshold.'),
+            [
+                sg.Button('Close Game', key=close_game_key, tooltip=
+                'This closes down the game upon reacing the player threshold.'),
 
-             sg.Button('Hibernate', key=hibernate_pc_key, tooltip=
-             'This puts your computer in to hibernation when hitting the player threshold. '
-             'Not quite as fast as sleep mode, but saves power'),
+                sg.Button('Hibernate', key=hibernate_pc_key, tooltip=
+                'This puts your computer in to hibernation when hitting the player threshold. '
+                'Not quite as fast as sleep mode, but saves power'),
 
-             sg.Button('Power down computer', key=shutdown_pc_key, tooltip=
-             'This does a hard shutdown of your computer when hitting the player threshold,'
-             'equivalent to pressing your powerbutton')]
+                sg.Button('Power down computer', key=shutdown_pc_key, tooltip=
+                'This does a hard shutdown of your computer when hitting the player threshold,'
+                'equivalent to pressing your powerbutton')
+            ]
         ]
 
     window = sg.Window('Choose your action', layout, element_justification='c')
@@ -62,8 +70,17 @@ def user_action_window(config: ScriptConfigFile,
         elif not app.SEEDING_PROCESS:
             if event in user_actions:
                 desired_useraction = user_actions[event]
-                app.SEEDING_PROCESS = multiprocessing.Process(target=app.seeding_pipeline, daemon=True,
-                                                          kwargs={'user_action': desired_useraction, 'config': config})
+
+                # app.SEEDING_PROCESS = multiprocessing.Process(target=app.seeding_pipeline, daemon=True,
+                #                                               kwargs={
+                #                                                   'user_action': desired_useraction,
+                #                                                   'config': config})
+                #
+                app.SEEDING_PROCESS = threading.Thread(target=app.seeding_pipeline,
+                                                       daemon=True,
+                                                       kwargs={
+                                                           'user_action': desired_useraction,
+                                                           'config': config})
                 app.SEEDING_PROCESS.name = 'seeding_process'
                 app.SEEDING_PROCESS.start()
                 if not app.SEEDING_PROCESS.is_alive():
@@ -83,27 +100,43 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
     sg.theme(window_theme)
 
     config = ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+    address = config.get_server_address()
 
+    top_button_row_font = ('helvetica', 12)
+
+    # Keys
     open_settings_window_key = 'Open'
     help_window_key = 'Help'
     stop_seeding_key = '-STOP_SEEDING-'
     start_seedingscript_key = '-LAUNCH-SCRIPT-'
     restore_settings_key = '-RESTORE_SETTINGS-'
+    restore_original_settings_key = 'ORIGINAL SETTINGS'
+    multiline_panel_key = 'multiline'
+    settings_folder_key = 'Open Settings Folder'
+    squad_settings_folder_key = 'Open Squads Settings Folder'
+    get_player_count_key = 'Get Player Count'
 
-    menu_def = [['Settings', [f'&{open_settings_window_key}']], ['Help', [f'&{help_window_key}']]]
+    # Defines the elements and layout of the top menu of the window. This is a bit wack, but it's how it works.
+    menu_def = [
+        ['Settings', [f'&{open_settings_window_key}']],
+        ['Help', [f'&{help_window_key}']],
+        ['File', [f'&{settings_folder_key}', f'&{squad_settings_folder_key}']]
+    ]
+
+    graph = []
+
     right_col = [sg.Column([
         # TODO Fill in graph code here
         #
         #
         #
-
         #
     ])]
 
     left_col = [sg.Column([
-        [sg.Text('SeedingScript Output', font=('Helvetica', 16))],
+        [sg.Text('SeedingScript Output', font=element_font)],
         [sg.MLine(size=(30, 40),
-                  key='-ML-',
+                  key=multiline_panel_key,
                   text_color='WHITE',
                   disabled=True,
                   autoscroll=True,
@@ -114,24 +147,26 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
     ])]
 
     top_row = [
-        sg.Button('Start SeedingScript', key=start_seedingscript_key, font=('helvetica', 16),
+        sg.Button('Start SeedingScript', key=start_seedingscript_key, font=top_button_row_font,
                   auto_size_button=True),
-        sg.Button('Restore last used settings', key=restore_settings_key, font=('helvetica', 16),
+        sg.Button('Restore last used settings', key=restore_settings_key, font=top_button_row_font,
                   auto_size_button=True, tooltip='Restores the settings that was '
                                                  'stored before the last time seeding settings were applied'),
-        sg.Button('Stop Seeding Process', key=stop_seeding_key, font=('helvetica', 16),
+        sg.Button('Stop Seeding Process', key=stop_seeding_key, font=top_button_row_font,
                   auto_size_button=True, enable_events=True),
-        sg.Button('Restore Original Settings')
+        sg.Button('Restore Original Settings', key=restore_original_settings_key, font=top_button_row_font,
+                  auto_size_button=True, enable_events=True),
+        sg.Button('Get Current Playercount', key=get_player_count_key, font=top_button_row_font,
+                  auto_size_button=True, enable_events=True)
     ]
-    graph = []
 
     layout = [
-        [sg.Menu(menu_def, tearoff=False)],
+        [sg.Menu(menu_def, tearoff=False, size=(10, 10))],
         [top_row],
         [left_col]
     ]
 
-    window = sg.Window('SeedingScript', layout, font=('Helvetica', 16), resizable=True, size=(1300, 1000),
+    window = sg.Window('SeedingScript', layout, font=element_font, resizable=True, size=(1300, 1000),
                        finalize=True)
 
     window.TKroot.minsize(1000, 1000)
@@ -145,7 +180,7 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
             break
 
         elif event == restore_settings_key:
-            app.restore_last_used_settings(compare_settings=False)
+            app.restore_last_used_settings(config, compare_settings=False)
 
         elif event == open_settings_window_key:
             settings_window(config=config)
@@ -155,20 +190,38 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
             if not app.SEEDING_PROCESS:
                 user_action_window(config=config)
 
+        elif event == restore_original_settings_key:
+            app.restore_original_settings(config=config)
+
+        elif event == get_player_count_key:
+            player_count = utils.get_current_playercount(address)
+            print(f'There are currently: {player_count} players on the specified server with IP: {address[0]}')
+            print(f'Do note that this number is inaccurate at higher player numbers.\n')
+
+        elif event == squad_settings_folder_key:
+            subprocess.run(['explorer.exe', config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH)])
+
+        elif event == settings_folder_key:
+            subprocess.run(['explorer.exe', settings.SCRIPT_CONFIG_SETTINGS_FOLDER])
+
         # Checks if the seeding_process variable is the initialized value,
         # if not, it means that a process has been initialized,
         # In which case the process will be killed, and reset to None.
         # This makes it easy to check avoid launching multiple instances of the same process.
         elif event == stop_seeding_key:
             if not app.SEEDING_PROCESS:
-                print('No active seeding process.')
+                printf('No active seeding process.')
                 continue
 
+            # if app.SEEDING_PROCESS.is_alive()
+
+
             if app.SEEDING_PROCESS.is_alive():
-                app.SEEDING_PROCESS.terminate()
-                app.SEEDING_PROCESS.join()
-                app.SEEDING_PROCESS = None
-                print('SeedingScript stopped')
+                printf('Seeding process is a live - temp not able to stop atm.')
+            #     app.SEEDING_PROCESS.terminate()
+            #     app.SEEDING_PROCESS.join()
+            #     app.SEEDING_PROCESS = None
+            #     printf('SeedingScript stopped')
     # Frees up the resources used by the window once the while loop has been broken out of
     window.close()
     sys.exit()
@@ -176,7 +229,7 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
 
 def settings_window(config: ScriptConfigFile,
                     window_theme: str = DEFAULT_WINDOW_THEME,
-                    element_font: tuple[str, int] = DEFAULT_GUI_FONT):
+                    default_text_font: tuple[str, int] = DEFAULT_GUI_FONT):
     """
     Calling this function creates an instance of the settings window as defined below. This is where the logic
     updating the script's config file is handled.
@@ -195,7 +248,7 @@ def settings_window(config: ScriptConfigFile,
     # Defining the left side of GUI, contains boolean settings and some other fields.
     left_col = sg.Column([
         [sg.Frame('', layout=[
-            [sg.Text("Server's IP/Domain", font=('Helvetica', 14)),
+            [sg.Text("Server's IP/Domain", font=default_text_font),
 
              sg.Text('Player Threshold', font=('Helvetica', 14), pad=(120, 0))],
 
@@ -265,7 +318,8 @@ def settings_window(config: ScriptConfigFile,
                            size=(5, 20),
                            default_value=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER),
                            key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER, enable_events=True)]],
-                      element_justification='center'),
+
+               element_justification='center'),
 
              # Right bottom frame on the left main_seeding_loop frame.
              sg.Frame("", layout=[
@@ -281,8 +335,8 @@ def settings_window(config: ScriptConfigFile,
                                default_text=config.get(ConfigKeys.SLEEP_INTERVAL_SECONDS),
                                enable_events=True,
                                tooltip=
-                               'How often the program will try and query the server for player numbers, defined in seconds. '
-                               'Default is 60 seconds, but generally shouldnt need to be touched'), sg.Text('Seconds')],
+                               "How often the program will try and query the server for player numbers, defined in seconds. "
+                               "Default is 60 seconds, but generally shouldn't need to be touched"), sg.Text('Seconds')],
 
                  [sg.Text('Auto join delay')],
                  [sg.InputText(key=ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS, size=(5, 5),
@@ -297,20 +351,20 @@ def settings_window(config: ScriptConfigFile,
     # Defining the right side of the settings window. Mainly contains input fields for paths
     right_col = sg.Column([
         [sg.Frame('', size=(400, 900), layout=[
-            [sg.Text('Squad game executable', font=('Helvetica', 14))],
+            [sg.Text('Squad game executable', font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.GAME_EXECUTABLE_NAME,
                           default_text=config.get(ConfigKeys.GAME_EXECUTABLE_NAME), enable_events=True)],
 
-            [sg.Text("Squad's launcher path", font=('Helvetica', 14))],
+            [sg.Text("Squad's launcher path", font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SQUAD_INSTALL_PATH,
                           default_text=config.get(ConfigKeys.SQUAD_INSTALL_PATH), enable_events=True),
-             sg.FileBrowse(initial_folder=app.programfiles_32)],
+             sg.FileBrowse(initial_folder=game_launcher_path)],
 
-            [sg.Text("Squad's steam URL start handle", font=('Helvetica', 14))],
+            [sg.Text("Squad's steam URL start handle", font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SQUAD_STEAM_URL_HANDLE,
                           default_text=config.get(ConfigKeys.SQUAD_STEAM_URL_HANDLE), enable_events=True)],
 
-            [sg.Text("Path to Squad's game config files", font=('helvetica', 14))],
+            [sg.Text("Path to Squad's game config files", font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SQUAD_CONFIG_FILES_PATH,
                           default_text=config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH), enable_events=True),
              sg.FolderBrowse(initial_folder=LOCAL_APPDATA)],
@@ -366,6 +420,10 @@ def settings_window(config: ScriptConfigFile,
                 except ValueError:
                     window.Element(event).Update(00)
 
+
+
+
+
         # upper_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER]
         # lower_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER]
         # if lower_value >= upper_value:
@@ -376,17 +434,20 @@ def settings_window(config: ScriptConfigFile,
         #     window.refresh()
 
         for key in ConfigKeys:
-            if event == key and values[key] != config.get(key):
-                config.set(key, values[key])
+            try:
+                if event == key and values[key] != config.get(key):
+                    config.set(key, values[key])
+            except Exception as err:
+                break
 
         if event == save_key:
             if config != config_initial:
-                print('Settings have been saved')
+                printf('Settings have been saved')
                 config.save_settings()
                 config_initial = deepcopy(config)
 
         elif event == default_key:
-            print(f'Settings have been reset')
+            printf(f'Settings have been reset')
             config.reset_to_defaults()
             # TODO add a way that all the GUI fields get updated when a reset happens.
 
@@ -394,7 +455,7 @@ def settings_window(config: ScriptConfigFile,
             #     try:
             #         window.Element(key).Update(config.get(key))
             #     except Exception as err:
-            #         print(err)
+            #         printf(err)
 
     window.close()
 
@@ -415,7 +476,6 @@ def help_window():
         if event in ('Exit', sg.WIN_CLOSED):
             app.PROGRAM_SHUTDOWN = True
             break
-
 
 
 def save_prompt(window_theme: str = DEFAULT_WINDOW_THEME,
