@@ -1,16 +1,16 @@
 import subprocess
 import sys
-import threading
 
 import PySimpleGUI as sg
 import main as app
-from copy import deepcopy
 
 import settings
 import utils
-from settings import ConfigKeys, ScriptConfigFile, LOCAL_APPDATA, SCRIPT_CONFIG_SETTINGS_FILE,\
-    programfiles_32, programfiles_64, game_launcher_path, game_config_path
-from utils import printf
+from copy import deepcopy
+from settings import ConfigKeys, ScriptConfigFile, LOCAL_APPDATA, SCRIPT_CONFIG_SETTINGS_FILE, \
+    game_launcher_path, close_game_key, hibernate_pc_key, shutdown_pc_key, user_actions
+# from main import launch_seeding_thread
+from utils import log
 
 # TODO Add a button to the settings page that will open the backup settings for the config files.
 # To open a folder from the command line, use the "start" command, and then the path to the folder.
@@ -28,9 +28,6 @@ def user_action_window(config: ScriptConfigFile,
     """
 
     sg.theme(window_theme)
-    close_game_key = '-CLOSE_GAME-'
-    hibernate_pc_key = '-HIBERNATE-'
-    shutdown_pc_key = '-SHUTDOWN-'
 
     layout = \
         [
@@ -54,9 +51,9 @@ def user_action_window(config: ScriptConfigFile,
 
     user_actions = \
         {
-            '-CLOSE_GAME-': 'close',
-            '-HIBERNATE-': 'hibernate',
-            '-SHUTDOWN-': 'shutdown'
+            close_game_key: 'close',
+            hibernate_pc_key: 'hibernate',
+            shutdown_pc_key: 'shutdown'
         }
 
     while True:
@@ -70,27 +67,14 @@ def user_action_window(config: ScriptConfigFile,
         elif not app.SEEDING_PROCESS:
             if event in user_actions:
                 desired_useraction = user_actions[event]
-
-                # app.SEEDING_PROCESS = multiprocessing.Process(target=app.seeding_pipeline, daemon=True,
-                #                                               kwargs={
-                #                                                   'user_action': desired_useraction,
-                #                                                   'config': config})
-                #
-                app.SEEDING_PROCESS = threading.Thread(target=app.seeding_pipeline,
-                                                       daemon=True,
-                                                       kwargs={
-                                                           'user_action': desired_useraction,
-                                                           'config': config})
-                app.SEEDING_PROCESS.name = 'seeding_process'
-                app.SEEDING_PROCESS.start()
-                if not app.SEEDING_PROCESS.is_alive():
-                    app.SEEDING_PROCESS = None
+                app.launch_seeding_thread(config, desired_useraction)
                 break
 
     window.close()
 
 
-def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
+def main_window(chosen_action: str | None,
+                window_theme: str = DEFAULT_WINDOW_THEME,
                 element_font: tuple[str, int] = DEFAULT_GUI_FONT):
     """
     Creates an instance of the start_seedingscript_remote window. Everything else is launched from this in sub-windows.
@@ -102,11 +86,15 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
     config = ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
     address = config.get_server_address()
 
+    launched_script_given_action = False
+
+    # Launch an action directly if one was given as an argument from the terminal, or stored in the config.
+
     top_button_row_font = ('helvetica', 12)
 
     # Keys
     open_settings_window_key = 'Open'
-    help_window_key = 'Help'
+    getting_started_key = 'Getting Started'
     stop_seeding_key = '-STOP_SEEDING-'
     start_seedingscript_key = '-LAUNCH-SCRIPT-'
     restore_settings_key = '-RESTORE_SETTINGS-'
@@ -119,7 +107,7 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
     # Defines the elements and layout of the top menu of the window. This is a bit wack, but it's how it works.
     menu_def = [
         ['Settings', [f'&{open_settings_window_key}']],
-        ['Help', [f'&{help_window_key}']],
+        ['Help', [f'&{getting_started_key}']],
         ['File', [f'&{settings_folder_key}', f'&{squad_settings_folder_key}']]
     ]
 
@@ -149,14 +137,14 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
     top_row = [
         sg.Button('Start SeedingScript', key=start_seedingscript_key, font=top_button_row_font,
                   auto_size_button=True),
-        sg.Button('Restore last used settings', key=restore_settings_key, font=top_button_row_font,
+        sg.Button('Restore Last Used Settings', key=restore_settings_key, font=top_button_row_font,
                   auto_size_button=True, tooltip='Restores the settings that was '
                                                  'stored before the last time seeding settings were applied'),
-        sg.Button('Stop Seeding Process', key=stop_seeding_key, font=top_button_row_font,
-                  auto_size_button=True, enable_events=True),
         sg.Button('Restore Original Settings', key=restore_original_settings_key, font=top_button_row_font,
                   auto_size_button=True, enable_events=True),
-        sg.Button('Get Current Playercount', key=get_player_count_key, font=top_button_row_font,
+        sg.Button('Stop Seeding Process', key=stop_seeding_key, font=top_button_row_font,
+                  auto_size_button=True, enable_events=True),
+        sg.Button('Get Current Player Count', key=get_player_count_key, font=top_button_row_font,
                   auto_size_button=True, enable_events=True)
     ]
 
@@ -179,45 +167,62 @@ def main_window(window_theme: str = DEFAULT_WINDOW_THEME,
             app.PROGRAM_SHUTDOWN = True
             break
 
-        elif event == restore_settings_key:
+        if chosen_action in user_actions.values():
+            if not app.SEEDING_PROCESS or not app.SEEDING_PROCESS.is_alive():
+                if not launched_script_given_action:
+                    log(f'Launching seeding script from the stored or given user action')
+                    log(f'The action to be performed is : {chosen_action}')
+                    app.launch_seeding_thread(config, chosen_action)
+                    launched_script_given_action = True
+
+        if app.SEEDING_PROCESS is not None:
+            if not app.SEEDING_PROCESS.is_alive():
+                app.SEEDING_PROCESS = None
+
+        if event == restore_settings_key:
             app.restore_last_used_settings(config, compare_settings=False)
 
-        elif event == open_settings_window_key:
+        if event == open_settings_window_key:
             settings_window(config=config)
 
         # Only opens the action prompt if the seeding process is not already running.
-        elif event == start_seedingscript_key:
-            if not app.SEEDING_PROCESS:
+        if event == start_seedingscript_key:
+            if not app.SEEDING_PROCESS or not app.SEEDING_PROCESS.is_alive():
                 user_action_window(config=config)
 
-        elif event == restore_original_settings_key:
+        if event == restore_original_settings_key:
             app.restore_original_settings(config=config)
 
-        elif event == get_player_count_key:
+        if event == get_player_count_key:
             player_count = utils.get_current_playercount(address)
-            print(f'There are currently: {player_count} players on the specified server with IP: {address[0]}')
-            print(f'Do note that this number is inaccurate at higher player numbers.\n')
+            if player_count is None:
+                log('The script was unable to fetch the current player count.')
+                log('Check to see if the saved IP and port are correct.')
+            else:
+                log(f'There are currently: {player_count} players on the specified server with IP: {address[0]}')
+                log(f'Do note that this number is inaccurate at higher player numbers.\n')
 
-        elif event == squad_settings_folder_key:
+        if event == squad_settings_folder_key:
             subprocess.run(['explorer.exe', config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH)])
 
-        elif event == settings_folder_key:
+        if event == settings_folder_key:
             subprocess.run(['explorer.exe', settings.SCRIPT_CONFIG_SETTINGS_FOLDER])
+
+        if event == getting_started_key:
+            getting_started_window()
 
         # Checks if the seeding_process variable is the initialized value,
         # if not, it means that a process has been initialized,
         # In which case the process will be killed, and reset to None.
         # This makes it easy to check avoid launching multiple instances of the same process.
-        elif event == stop_seeding_key:
+        if event == stop_seeding_key:
             if not app.SEEDING_PROCESS:
-                printf('No active seeding process.')
+                log('No active seeding process.')
                 continue
 
-            # if app.SEEDING_PROCESS.is_alive()
-
-
             if app.SEEDING_PROCESS.is_alive():
-                printf('Seeding process is a live - temp not able to stop atm.')
+                # TODO add the ability to kill the seeding process again.
+                log('Seeding process is alive - temp not able to stop atm.')
             #     app.SEEDING_PROCESS.terminate()
             #     app.SEEDING_PROCESS.join()
             #     app.SEEDING_PROCESS = None
@@ -244,6 +249,14 @@ def settings_window(config: ScriptConfigFile,
 
     save_key = 'SAVE'
     default_key = 'default'
+    settings_key = 'settings'
+    none_key = 'none'
+    action_group = 'ACTION1'
+
+    radio_player_action_buttons = [
+        [sg.Radio('None', key=none_key, default=True, group_id=action_group)],
+        [sg.Radio('Close', key=close_game_key, group_id=action_group)],
+        [sg.Radio('Shutdown', key=shutdown_pc_key, group_id=action_group)]]
 
     # Defining the left side of GUI, contains boolean settings and some other fields.
     left_col = sg.Column([
@@ -286,11 +299,6 @@ def settings_window(config: ScriptConfigFile,
                              'Whether the script will close itself should the game be closed, after the script main_seeding_loop logic loop has started\n'
                              "Does not affect regular shutdown if that's the chosen action. ")],
 
-                [sg.Checkbox('Attempt autojoin if already in the game',
-                             default=config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME),
-                             key=ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME, enable_events=True, tooltip=
-                             "Specifies whether the script will attempt to autojoin the desired server, regardless of the user already being in-game")],
-
                 [sg.Checkbox('Random player threshold',
                              default=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED),
                              key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED, enable_events=True, tooltip=
@@ -298,13 +306,19 @@ def settings_window(config: ScriptConfigFile,
                              'Chooses a random integer between the chosen lower and upper bounds.'
                              'By default on. Note that this overrides the manually set player threshold, but this is left as an option should the user'
                              'wish to use their own threshold')],
+                radio_player_action_buttons
 
-                [sg.Checkbox('Attempt rejoin if disconnected',
-                             default=config.get(ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER),
-                             key=ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER, enable_events=True, tooltip=
-                             'Whether the script will attempt to reconnect when the player name is not found in the server. By default off.'
-                             'Do note that an accurate player name should be specified if this setting is enabled, otherwise the'
-                             'script will attempt to constantly rejoin without being able to.')]
+                # [sg.Checkbox('Attempt autojoin if already in the game',
+                #              default=config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME),
+                #              key=ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME, enable_events=True, tooltip=
+                #              "Specifies whether the script will attempt to autojoin the desired server, regardless of the user already being in-game")],
+
+                # [sg.Checkbox('Attempt rejoin if disconnected',
+                #              default=config.get(ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER),
+                #              key=ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER, enable_events=True, tooltip=
+                #              'Whether the script will attempt to reconnect when the player name is not found in the server. By default off.'
+                #              'Do note that an accurate player name should be specified if this setting is enabled, otherwise the'
+                #              'script will attempt to constantly rejoin without being able to.')]
             ])],
 
             [sg.Frame('Threshold of players', [
@@ -314,12 +328,11 @@ def settings_window(config: ScriptConfigFile,
                            default_value=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER),
                            key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER, enable_events=True),
 
-                 sg.Slider(range=(config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER), 100), orientation='v',
-                           size=(5, 20),
+                 sg.Slider(range=(1, 100), orientation='v', size=(5, 20),
                            default_value=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER),
                            key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER, enable_events=True)]],
 
-               element_justification='center'),
+                      element_justification='center'),
 
              # Right bottom frame on the left main_seeding_loop frame.
              sg.Frame("", layout=[
@@ -330,7 +343,7 @@ def settings_window(config: ScriptConfigFile,
                                enable_events=True,
                                tooltip='How many attempts the script will attempt to autojoin the server before giving up')],
 
-                 [sg.Text('Game Server query interval')],
+                 [sg.Text('Game server query interval')],
                  [sg.InputText(key=ConfigKeys.SLEEP_INTERVAL_SECONDS, size=(5, 5),
                                default_text=config.get(ConfigKeys.SLEEP_INTERVAL_SECONDS),
                                enable_events=True,
@@ -338,14 +351,13 @@ def settings_window(config: ScriptConfigFile,
                                "How often the program will try and query the server for player numbers, defined in seconds. "
                                "Default is 60 seconds, but generally shouldn't need to be touched"), sg.Text('Seconds')],
 
-                 [sg.Text('Auto join delay')],
+                 [sg.Text('Auto-join delay')],
                  [sg.InputText(key=ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS, size=(5, 5),
-                               default_text=config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS),
+                               default_text=config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS), enable_events=True,
                                tooltip=
                                'The amount of time from when the game launched, '
                                'to when the script will attempt to autojoin the specified server, '
-                               'This will ',
-                               enable_events=True), sg.Text('Seconds')]
+                               'This will '), sg.Text('Seconds')]
              ])]])]])
 
     # Defining the right side of the settings window. Mainly contains input fields for paths
@@ -369,16 +381,20 @@ def settings_window(config: ScriptConfigFile,
                           default_text=config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH), enable_events=True),
              sg.FolderBrowse(initial_folder=LOCAL_APPDATA)],
 
-            [sg.Text('Server name to autojoin', font=('helvetica', 14))],
+            [sg.Text('Name of the server to join', font=('helvetica', 14))],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN,
                           default_text=config.get(ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN),
-                          enable_events=True)],
+                          enable_events=True,
+                          tooltip=f'The name of the server that the script will attempt to join,'
+                                  f'if the autojoin functionality is enabled. '
+                                  f'Do note that the server needs to be favourited for this to work.')],
 
             [sg.Text('Player name', font=('helvetica', 14),
                      tooltip="The player's in game name. Not case sensitive, and tags are not required")],
             [sg.InputText(size=(35, 20), key=ConfigKeys.PLAYER_NAME,
                           default_text=config.get(ConfigKeys.PLAYER_NAME), enable_events=True,
                           tooltip="The player's in game name. Not case sensitive, and tags are not required")]
+
             # This is the delimiter for the frame.
         ])]
         # This is the delimiter for the column
@@ -388,8 +404,7 @@ def settings_window(config: ScriptConfigFile,
     layout = \
         [[sg.Text('Settings', font=('helvetica', 26))],
          [left_col, right_col],
-         [sg.Button('Save', key=save_key), sg.Button('Reset to defaults', key=default_key),
-          sg.Button('Open Config file folder')]]
+         [sg.Button('Save', key=save_key), sg.Button('Reset to defaults', key=default_key), sg.Button('Open Config file folder', key=settings_key)]]
 
     window = sg.Window('SeedingScript settings', layout, font=('Helvetica', 16), resizable=True, finalize=True)
 
@@ -420,10 +435,6 @@ def settings_window(config: ScriptConfigFile,
                 except ValueError:
                     window.Element(event).Update(00)
 
-
-
-
-
         # upper_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER]
         # lower_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER]
         # if lower_value >= upper_value:
@@ -442,15 +453,17 @@ def settings_window(config: ScriptConfigFile,
 
         if event == save_key:
             if config != config_initial:
-                printf('Settings have been saved')
+                log('Settings have been saved')
                 config.save_settings()
                 config_initial = deepcopy(config)
 
         elif event == default_key:
-            printf(f'Settings have been reset')
+            log(f'Settings have been reset')
             config.reset_to_defaults()
             # TODO add a way that all the GUI fields get updated when a reset happens.
 
+        elif event == settings_key:
+            subprocess.run(['explorer.exe', config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH)])
             # for key in ConfigKeys:
             #     try:
             #         window.Element(key).Update(config.get(key))
@@ -460,15 +473,59 @@ def settings_window(config: ScriptConfigFile,
     window.close()
 
 
-def help_window():
+def getting_started_window(text_size=('helvetica', 12)):
     sg.theme(DEFAULT_WINDOW_THEME)
-    config = ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
+
+    help_text = """
+    To actually get the script running, there are just a few things you need to do:
+    1. Go into the settings and input the IP and query port of the server you want to seed.
+        You can find this information in BattleMetrics under the address field. It will be formatted as follows:
+
+        <IP:PORT>
+
+        Example:
+
+        127.0.0.1:1111
+
+    2. Input your in-game name into the player name field.
+    3. Input the name of the server you want to join in the corresponding field.
+        You don't need to input entire server name here, in-fact, this is probably going to make the auto-join not work.
+        So just input a recognizable part of it, ideally early on in the name.
+        For example, for TT specifically, just write "tactrig".
+    4. Save the settings and optionally change any other settings you may want to adjust.
+    5. Open the game and favorite the server you want to join.
+        This step is very important because the script currently does not support finding the server in the regular server browser.
+
+    The script is now ready for use.
+    You can click the "Start Seeding Script" button and choose whatever you want to happen when the player number hits its threshold.
+    """
 
     layout = [
-
+        [sg.Text(help_text, font=text_size)],
+        [sg.Button(f'OK', font=text_size)]
     ]
+    window = sg.Window('Getting Started', layout)
 
-    window = sg.Window('Help Window')
+    while True:
+        event, values = window.read(timeout=150)
+
+        if event in ('Exit', sg.WIN_CLOSED, 'OK'):
+            break
+
+    window.close()
+
+def known_issues_window(text_size=('helvetica', 12)):
+    sg.theme(DEFAULT_WINDOW_THEME)
+    text = """
+    
+    
+    
+    """
+
+    layout = [
+        [sg.Text(text, font=text_size)]
+    ]
+    window = sg.Window('Known Issues', layout)
 
     while True:
         event, values = window.read(timeout=150)
@@ -476,6 +533,7 @@ def help_window():
         if event in ('Exit', sg.WIN_CLOSED):
             app.PROGRAM_SHUTDOWN = True
             break
+    window.close()
 
 
 def save_prompt(window_theme: str = DEFAULT_WINDOW_THEME,
@@ -504,10 +562,15 @@ def save_prompt(window_theme: str = DEFAULT_WINDOW_THEME,
         elif event == no_key:
             pass
 
+    window.close()
 
 def test():
     main_window(DEFAULT_WINDOW_THEME)
 
 
 if __name__ == '__main__':
+    # settings_window(config=ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE))
+    # help_window()
     test()
+    # getting_started_window()
+
