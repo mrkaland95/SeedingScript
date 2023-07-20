@@ -1,6 +1,8 @@
 import logging
 import os
+import socket
 import subprocess
+import time
 import a2s.exceptions
 import a2s
 import psutil
@@ -11,8 +13,7 @@ import win32gui
 from a2s import players
 
 
-
-def printf(string: str):
+def log(string: str):
     print(f'{string}\n')
 
 
@@ -26,8 +27,8 @@ def player_in_server(server_address: tuple[str, int], name: str) -> bool | None:
                 break
 
     except a2s.BufferExhaustedError:
-        printf('Bug in the a2s module when trying to fetch the player list.')
-        printf('For the time being there is no fix for this.')
+        log('Bug in the a2s module when trying to fetch the player list.')
+        log('For the time being there is no fix for this.')
         in_server = None
 
     except Exception as err:
@@ -35,6 +36,17 @@ def player_in_server(server_address: tuple[str, int], name: str) -> bool | None:
         in_server = None
 
     return in_server
+
+def get_info(server_address: tuple[str, int], attempts: int = 3):
+
+    for _ in range(attempts):
+        try:
+            info = a2s.info(address=server_address)
+        except a2s.BufferExhaustedError:
+            pass
+        except Exception as err:
+            pass
+
 
 
 # def get_current_playercount(server_address: tuple[str, int], timeout: float = 3.0) -> int | None:
@@ -56,30 +68,13 @@ def player_in_server(server_address: tuple[str, int], name: str) -> bool | None:
 #                 players_in_server.append(player)
 #
 #     except a2s.exceptions.BufferExhaustedError:
-#         settings.LOGGER.warning('Buffer was exhausted')
+#         print('Buffer was exhausted')
 #         return None
 #     except Exception as err:
 #         logging.warning(err)
 #         return None
 #
 #     return len(players_in_server)
-
-
-def get_current_playercount(server_address: tuple[str, int], timeout: float = 5.0) -> int | None:
-    """
-    Version that queries the server for player count. Do note that the player count is slightly too high(for various reasons)
-
-    @param server_address:
-    @param timeout:
-    @return:
-    """
-    try:
-        players = a2s.info(server_address, timeout=timeout)
-        return players.player_count
-    except a2s.BufferExhaustedError as err:
-        print('There was a buffer exhausted error when attempting to retrieve the player count.')
-        return None
-
 
 
 
@@ -102,6 +97,7 @@ def initialize_folder(folder_path: str | os.PathLike):
         os.mkdir(folder_path)
     else:
         logging.debug(f'Folder: {folder_path} already exists')
+
 
 
 def process_running(executable):
@@ -167,7 +163,6 @@ def get_screen_resolution() -> (int, int):
         print(err)
         print("Error when trying to find the user's resolution size")
         return 1920, 1080
-
 
 def find_window_hwnd(window_name_target: str = 'SquadGame'):
     """
@@ -251,13 +246,95 @@ def launch_game(game_launcher, game_url):
             print('Another possibility might be that the game is already running')
 
 
-def main():
-    ipaddress = '23.228.238.22'
+
+def get_current_playercount_main(server_address: tuple[str, int], timeout: float = 5.0):
+    try:
+        count = 0
+        players = a2s.players(server_address, timeout=timeout)
+        for player in players:
+            if player.name != "":
+                count += 1
+
+        return count
+
+    except a2s.BufferExhaustedError as err:
+        log('There was a buffer exhausted error when attempting to retrieve the player count.')
+        return None
+        # printf(err)
+
+    except socket.timeout as err:
+        log('Timed out when trying to retrieve the player count')
+        log(err)
+        return None
+
+    except Exception as err:
+        log('Some other exception occured. The error was:')
+        log(err)
+
+
+def get_current_playercount_backup(server_address: tuple[str, int], timeout: float = 5.0):
+    try:
+        info = a2s.info(server_address, timeout=timeout)
+        if info:
+            return info.player_count
+    except a2s.BufferExhaustedError as err:
+        print('There was a buffer exhausted error when attempting to retrieve the player count.')
+        return None
+    except Exception as err:
+        # I don't want this to crash the entire program, so catching all errors here.
+        return None
+
+
+def get_current_playercount(server_address: tuple[str, int], timeout: float = 5.0, attempts: int = 3) -> int | None:
+    """
+    Version that queries the server for player count. Do note that the player count is slightly too high(for various reasons)
+
+    @param server_address: IP and port of the server that is to be quered
+    @param timeout: The time
+    @return:
+    """
+
+    # This is not pretty, but hopefully a bit more robust.
+    for _ in range(attempts):
+        player_count = get_current_playercount_backup(server_address)
+        if player_count is not None:
+            return player_count
+
+
+        #
+        # try:
+        #     players = a2s.info(server_address, timeout=timeout)
+        #     if players:
+        #         return players.player_count
+        #
+        # except a2s.BufferExhaustedError as err:
+        #     print('There was a buffer exhausted error when attempting to retrieve the player count.')
+        #     return None
+        #
+        # except TimeoutError as err:
+        #     time.sleep(1)
+        #     # print('Timed out when attempting to get the player count')
+        #     # return None
+
+
+
+
+
+
+
+
+
+
+def test():
+    ipaddress = '23.228.238.28'
     port = 27175
     address = (ipaddress, port)
 
+    # result = a2s.players(address)
+    # print(result)
     result = a2s.info(address)
-    print(result.player_count)
+    print(result)
+    # print(result.player_count)
     # print(a2s.info(address))
     # print(a2s.rules(address))
 
@@ -268,6 +345,4 @@ def main():
 
 
 if __name__ == '__main__':
-
-
-    main()
+    test()

@@ -1,6 +1,6 @@
 import unittest
 
-import GUI
+import ui
 import autojoin
 import settings as cnfg
 import utils
@@ -59,7 +59,7 @@ class TestAutojoin(unittest.TestCase):
 
 class TestUtils(unittest.TestCase):
     def test_find_playercount(self):
-        ip = '23.228.238.22'
+        ip = '23.228.238.28'
         port = 27175
         players = utils.get_current_playercount((ip, port))
         print(players)
