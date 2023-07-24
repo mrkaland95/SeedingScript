@@ -14,7 +14,15 @@ from a2s import players
 
 
 def log(string: str):
-    print(f'{string}\n')
+    # current_time = time.strftime(time.localtime())
+    print(f'{get_formatted_local_time()} - {string}\n')
+
+def get_formatted_local_time():
+    """
+    @return: Returns a string with the current local time
+    """
+    now = time.localtime()
+    return time.strftime("%Y/%m/%d - %H:%M:%S", now)
 
 
 def player_in_server(server_address: tuple[str, int], name: str) -> bool | None:
@@ -38,14 +46,14 @@ def player_in_server(server_address: tuple[str, int], name: str) -> bool | None:
     return in_server
 
 def get_info(server_address: tuple[str, int], attempts: int = 3):
-
     for _ in range(attempts):
         try:
             info = a2s.info(address=server_address)
+            return info
         except a2s.BufferExhaustedError:
-            pass
+            return None
         except Exception as err:
-            pass
+            return None
 
 
 
@@ -96,7 +104,7 @@ def initialize_folder(folder_path: str | os.PathLike):
         logging.debug(f'Creating folder: {folder_path}')
         os.mkdir(folder_path)
     else:
-        logging.debug(f'Folder: {folder_path} already exists')
+        log(f'Folder: {folder_path} already exists')
 
 
 
@@ -124,7 +132,7 @@ def find_window_size(hwnd) -> (int, int):
         window_width, window_height = clientRect[2], clientRect[3]
         return int(window_width), int(window_height)
     except Exception as err:
-        logging.debug(f'{err}')
+        log(f'{err}')
         # Window was not found or was otherwise unable to be read. This may happen if the window was not in the
         # foreground.
         return None, None

@@ -1,21 +1,17 @@
 import logging
 import time
-
 import cv2
 import easyocr
 import keyboard
 import numpy as np
 import pyautogui
-
+import torch
+import main
+import settings
 import utils
-from settings import ScriptConfigFile, ConfigKeys, SCRIPT_CONFIG_SETTINGS_FILE
+from settings import ScriptConfigFile, ConfigKeys, SCRIPT_CONFIG_SETTINGS_FILE, EXIT_SEEDING_LOOP
 from utils import force_window_to_foreground, find_window_hwnd, find_window_size
 from enum import Enum, auto
-
-# config = ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
-
-
-# TODO move these into their own config file so it can be easily changed by the user.
 
 
 class AutoJoinStates(Enum):
@@ -25,25 +21,30 @@ class AutoJoinStates(Enum):
     IN_SERVER = auto()
     IN_SERVER_BROWSER = auto()
     FOUND_SERVER = auto()
+    IN_QUEUE = auto()
+    MODDED_QUEUE = auto()
     STARTUP = auto()
     UNABLE_TO_JOIN = auto()
     UNKNOWN = auto()
 
 
 def reset_windows_menu():
-    # # TODO should probably try and find a different solution for this.
-    # Discovered some problems with the autojoin functionality after waking up from hibernation.
-    # This is a dumb workaround to make the start menu go away.
+    """
+    # TODO should probably try and find a different solution for this.
+    This is essentially a hack to try and make sure the game window can be forced to the foreground.
+    If for example the start menu is open, windows does not allow you to force a window in front of it, so the start menu must be minimized in some way
+
+    """
+
     try:
         keyboard.press_and_release('windows')
         time.sleep(0.5)
-        pyautogui.click(x=1920 // 2, y=1080 // 2, button='middle')
+        pyautogui.click(x=1920, y=20, button='middle')
     except Exception as err:
         logging.warning(f'{err} \n')
 
 
-
-def perform_autojoin(config: ScriptConfigFile, game_started_by_script):
+def perform_autojoin(config: ScriptConfigFile, game_started_by_script: bool) -> bool:
     """
     Function that is responsible for joining a server. Takes in a config file to get it's needed parameters.
     """
@@ -52,42 +53,52 @@ def perform_autojoin(config: ScriptConfigFile, game_started_by_script):
     key = 'scroll lock'
     pyautogui.press(key)
 
-    # reset_windows_menu()
+    reset_windows_menu()
+
+    if settings.EXIT_SEEDING_LOOP:
+        utils.log('Exiting seeding loop')
+        settings.EXIT_SEEDING_LOOP = False
+        return False
 
     attempt_to_autojoin_if_already_ingame = config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME)
     game_executable = config.get(ConfigKeys.GAME_EXECUTABLE_NAME)
 
     if not attempt_to_autojoin_if_already_ingame:
-        print('Autojoin while already ingame not enabled\n')
-        print('Checking if the script started the game\n')
+        utils.log('Autojoin while already ingame not enabled\n')
+        utils.log('Checking if the script started the game\n')
         if not game_started_by_script:
             return False
-        print('Script started the game, attempting autojoin\n')
+
+        utils.log('Script started the game, attempting autojoin\n')
     else:
-        print('Autojoin while in-game enabled.\n')
-        print('Attempting to autojoin\n')
+        utils.log('Autojoin while in-game enabled.\n')
+        utils.log('Attempting to autojoin\n')
 
     for i in range(config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS), 0, -1):
-        print(f'Attempting to autojoin in {i} seconds\n')
+        utils.log(f'Attempting to autojoin in {i} seconds\n')
+        if main.STOP_SEEDINGSCRIPT:
+            utils.log(f'AutoSeeding shutdown flag registered. Shutting down.')
+            main.reset_seeding_script_process()
+            return False
+
         time.sleep(1)
+
+    if main.STOP_SEEDINGSCRIPT:
+        utils.log(f'AutoSeeding shutdown flag registered. Shutting down.')
+        main.reset_seeding_script_process()
+        return False
 
     # TODO add or find some sort of check to see if the window is in the foreground.
     utils.process_running(game_executable)
     force_window_to_foreground(find_window_hwnd())
     users_game_width, users_game_height = find_window_size(find_window_hwnd())
-    if (users_game_width or users_game_height) is None:
-        print('The script likely tried to fetch your game resolution before the game had started properly\n')
-        print('A possible remedy for this might be an increase to your delay " in the config file.\n')
+    if users_game_width is None or users_game_height is None:
+        utils.log('The script likely tried to fetch your game resolution before the game had started properly\n')
+        utils.log('A possible remedy for this might be an increase to your delay " in the config file.\n')
         time.sleep(15)
 
-    print(f"Detected game resolution is: {users_game_width}x{users_game_height} pixels \n")
+    return autojoin_state_machine(config)
 
-    autojoin_result = autojoin_state_machine(config)
-
-    if autojoin_result:
-        return True
-    else:
-        return False
 
 
 class OCRResult:
@@ -99,7 +110,7 @@ class OCRResult:
         self.confidence = result[2]
 
 
-def get_current_state(config, result: list[OCRResult]) -> tuple[AutoJoinStates, OCRResult | None]:
+def get_current_state(config: ScriptConfigFile, ocr_result: list[OCRResult]) -> tuple[AutoJoinStates, OCRResult | None]:
     current_state = AutoJoinStates.UNKNOWN
 
     main_menu_to_server_browser_string = 'servers'
@@ -119,28 +130,27 @@ def get_current_state(config, result: list[OCRResult]) -> tuple[AutoJoinStates, 
     exit_string = 'exit'
 
     button_to_click = None
-    find_match_res = find_string_on_screen_from_results(result, find_match_string)
-    in_server_browser_res = find_string_on_screen_from_results(result, server_browser_string)
-    favourites_res = find_string_on_screen_from_results(result, favourites_string)
-    search_res = find_string_on_screen_from_results(result, search_string)
-    filter_res = find_string_on_screen_from_results(result, filter_string)
-    main_menu_res = find_string_on_screen_from_results(result, main_menu_to_server_browser_string)
-    server_name_res = find_string_on_screen_from_results(result, server_name_string)
-    server_res = find_string_on_screen_from_results(result, server_rules_string)
-    rules_res = find_string_on_screen_from_results(result, server_rules_string)
-    continue_res = find_string_on_screen_from_results(result, continue_string)
+    find_match_res = find_string_on_screen_from_results(ocr_result, find_match_string)
+    in_server_browser_res = find_string_on_screen_from_results(ocr_result, server_browser_string)
+    favourites_res = find_string_on_screen_from_results(ocr_result, favourites_string)
+    search_res = find_string_on_screen_from_results(ocr_result, search_string)
+    filter_res = find_string_on_screen_from_results(ocr_result, filter_string)
+    main_menu_res = find_string_on_screen_from_results(ocr_result, main_menu_to_server_browser_string)
+    server_name_res = find_string_on_screen_from_results(ocr_result, server_name_string)
+    server_res = find_string_on_screen_from_results(ocr_result, server_rules_string)
+    rules_res = find_string_on_screen_from_results(ocr_result, server_rules_string)
+    continue_res = find_string_on_screen_from_results(ocr_result, continue_string)
 
     server_address = (config.get(ConfigKeys.SERVER_IP), config.get(ConfigKeys.SERVER_QUERY_PORT))
 
     # States/Conditions.
-
     found_server = server_name_res and in_server_browser_res and favourites_res
     # We know we are in the favourites tab if we can see the server browser tabs, favourites tabs, but not the filter box
     # This is beacuse the filter box is unique to the server browser and custom browser tab.
     in_favourites = in_server_browser_res and favourites_res and not filter_res
     in_main_menu = main_menu_res and find_match_res
     in_server_browser = in_server_browser_res and filter_res
-    in_game = (server_res and rules_res) or utils.player_in_server(server_address, config.get(ConfigKeys.PLAYER_NAME)) or continue_res
+    in_game = utils.player_in_server(server_address, config.get(ConfigKeys.PLAYER_NAME)) or (server_res and rules_res) or continue_res
 
     if in_game:
         current_state = AutoJoinStates.IN_SERVER
@@ -167,49 +177,74 @@ def get_current_state(config, result: list[OCRResult]) -> tuple[AutoJoinStates, 
     return current_state, button_to_click
 
 
-def autojoin_state_machine(config: ScriptConfigFile):
+def autojoin_state_machine(config: ScriptConfigFile) -> bool:
+    """
+    Function responsible for actually performing all the actions required to join a server.
+    @param config:
+    @return:
+    """
+    address = config.get_server_address()
+    name = config.get(ConfigKeys.PLAYER_NAME)
     attempts = 0
-    limit = config.get(ConfigKeys.ATTEMPTS_TO_AUTOJOIN_SERVER)
+    limit = 5
+    last_state: AutoJoinStates = AutoJoinStates.UNKNOWN
+    current_state: AutoJoinStates = AutoJoinStates.UNKNOWN
+
 
     while True:
-        force_window_to_foreground(find_window_hwnd())
+        if main.STOP_SEEDINGSCRIPT:
+            return False
+
+        if not utils.process_running(config.get(ConfigKeys.GAME_EXECUTABLE_NAME)):
+            utils.log(f'Game not running, exiting auto-join process.')
+            return False
+
         result = get_all_text_live()
-        current_state, OCR_result = get_current_state(config, result)
-        utils.printf(f'Current state of autojoining is: {current_state.name}')
 
-        if OCR_result is None or current_state is AutoJoinStates.UNKNOWN:
-            attempts += 1
-            if attempts >= limit:
-                utils.printf(f'Exceeded amount of autojoin attempts. ({attempts} attempts)')
-                return False
+        player_in_server = utils.player_in_server(server_address=address, name=name)
+        if player_in_server:
+            current_state = AutoJoinStates.IN_SERVER
 
-            time.sleep(60)
-            continue
-
-        if current_state is AutoJoinStates.FOUND_SERVER:
-            utils.process_running(config.get(ConfigKeys.GAME_EXECUTABLE_NAME))
-            pyautogui.doubleClick(OCR_result.x, OCR_result.y)
-
-            print('Clicked on server')
-            time.sleep(20)
-
-            ip = config.get(ConfigKeys.SERVER_IP)
-            port = int(config.get(ConfigKeys.SERVER_QUERY_PORT))
-            name = config.get(ConfigKeys.PLAYER_NAME)
-            player_in_server = utils.player_in_server(server_address=(ip, port), name=name)
-            if player_in_server:
-                break
+        force_window_to_foreground(find_window_hwnd())
 
         if current_state is AutoJoinStates.IN_SERVER:
-            print('Player is in game. Autojoin complete')
+            utils.log('Joined the server successfully. Exiting the autojoin process.')
             break
+
+        if not utils.process_running(config.get(ConfigKeys.GAME_EXECUTABLE_NAME)):
+            utils.log(f'Game not running, exiting auto-join process.')
+            return False
+
+        current_state, OCR_result_to_click = get_current_state(config, result)
+        utils.log(f'Current state of autojoining is: {current_state.name}')
+
+        if OCR_result_to_click is None or current_state is AutoJoinStates.UNKNOWN:
+            attempts += 1
+            time.sleep(20)
+
+        elif current_state is AutoJoinStates.FOUND_SERVER:
+            utils.process_running(config.get(ConfigKeys.GAME_EXECUTABLE_NAME))
+            pyautogui.doubleClick(OCR_result_to_click.x, OCR_result_to_click.y, interval=0.05)
+            utils.log('Clicked on server, waiting to see if the join was successful.')
         else:
-            pyautogui.click(OCR_result.x, OCR_result.y)
+            if OCR_result_to_click:
+                pyautogui.click(OCR_result_to_click.x, OCR_result_to_click.y)
+
+        if attempts >= limit:
+            utils.log(f'Exceeded amount of autojoin attempts. ({attempts} attempts)')
+            return False
+
+        if current_state == last_state:
+            attempts += 1
+        else:
+            attempts = 0
+
+        last_state = current_state
 
     return True
 
 
-def find_string_on_screen_from_results(strings: list[OCRResult], text: str, ) -> OCRResult | None:
+def find_string_on_screen_from_results(strings: list[OCRResult], text: str) -> OCRResult | None:
     for item in strings:
         if text.lower() in item.text.lower():
             return item
@@ -224,11 +259,13 @@ def get_all_text_live() -> list[OCRResult]:
     # Convert the PIL Image to OpenCV format (numpy array)
     screenshot = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
 
+    gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+
     # Initialize EasyOCR reader
-    reader = easyocr.Reader(['en'], gpu=True)
+    reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
 
     # Perform OCR using EasyOCR
-    result = reader.readtext(screenshot, detail=1)
+    result = reader.readtext(gray_screenshot, detail=1)
 
     results = []
 
@@ -242,7 +279,6 @@ def get_all_text_live() -> list[OCRResult]:
 def test_autojoin():
     config = ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
     perform_autojoin(config, game_started_by_script=False)
-
 
 
 if __name__ == '__main__':

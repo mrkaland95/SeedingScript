@@ -2,6 +2,8 @@ import subprocess
 import sys
 
 import PySimpleGUI as sg
+
+import main
 import main as app
 
 import settings
@@ -16,7 +18,7 @@ from utils import log
 # To open a folder from the command line, use the "start" command, and then the path to the folder.
 
 DEFAULT_WINDOW_THEME = 'DarkGrey14'
-DEFAULT_GUI_FONT = ('helvetica', 15)
+DEFAULT_GUI_FONT = ('helvetica', 12)
 
 
 def user_action_window(config: ScriptConfigFile,
@@ -221,12 +223,12 @@ def main_window(chosen_action: str | None,
                 continue
 
             if app.SEEDING_PROCESS.is_alive():
+                main.STOP_SEEDINGSCRIPT = True
+
                 # TODO add the ability to kill the seeding process again.
-                log('Seeding process is alive - temp not able to stop atm.')
-            #     app.SEEDING_PROCESS.terminate()
-            #     app.SEEDING_PROCESS.join()
-            #     app.SEEDING_PROCESS = None
-            #     printf('SeedingScript stopped')
+                log('Seeding process is currently running, sending signal to stop.')
+                log('This is not fully implemented yet. If it does not stop within the desired time, close the main window.')
+
     # Frees up the resources used by the window once the while loop has been broken out of
     window.close()
     sys.exit()
@@ -253,17 +255,17 @@ def settings_window(config: ScriptConfigFile,
     none_key = 'none'
     action_group = 'ACTION1'
 
-    radio_player_action_buttons = [
-        [sg.Radio('None', key=none_key, default=True, group_id=action_group)],
-        [sg.Radio('Close', key=close_game_key, group_id=action_group)],
-        [sg.Radio('Shutdown', key=shutdown_pc_key, group_id=action_group)]]
+
+    radio_button_none = sg.Radio('None', key=none_key, default=True, group_id=action_group)
+    radio_button_close = sg.Radio('Close', key=close_game_key, group_id=action_group)
+    radio_button_shutdown = sg.Radio('Shutdown', key=shutdown_pc_key, group_id=action_group)
 
     # Defining the left side of GUI, contains boolean settings and some other fields.
     left_col = sg.Column([
         [sg.Frame('', layout=[
             [sg.Text("Server's IP/Domain", font=default_text_font),
 
-             sg.Text('Player Threshold', font=('Helvetica', 14), pad=(120, 0))],
+             sg.Text('Player Threshold', font=default_text_font, pad=(120, 0))],
 
             [sg.InputText(size=(18, 20), key=ConfigKeys.SERVER_IP,
                           default_text=config.get(ConfigKeys.SERVER_IP),
@@ -274,39 +276,42 @@ def settings_window(config: ScriptConfigFile,
                           enable_events=True,
                           pad=(55, 0))],
 
-            [sg.Text("Server's query port", font=('Helvetica', 14))],
+            [sg.Text("Server's Query Port", font=default_text_font)],
 
             [sg.InputText(size=(18, 20), key=ConfigKeys.SERVER_QUERY_PORT,
                           default_text=config.get(ConfigKeys.SERVER_QUERY_PORT), enable_events=True)],
 
             # Inner frame for on/off settings
-            [sg.Frame('On/Off settings', layout=[
-                [sg.Checkbox('Enable automatic server joining',
+            [sg.Frame('On/Off settings', font=default_text_font, layout=[
+                [sg.Checkbox('Automatic Server Joining',
                              default=config.get(ConfigKeys.JOIN_SERVER_AUTOMATICALLY_ENABLED),
                              key=ConfigKeys.JOIN_SERVER_AUTOMATICALLY_ENABLED, enable_events=True, tooltip=
                              'Specifies whether the script will try to automatically join the desired server or not.\n'
                              'By default this is on.')],
 
-                [sg.Checkbox('Lightweight seeding settings',
+                [sg.Checkbox('Lightweight Seeding Settings', font=default_text_font,
                              default=config.get(ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED),
                              key=ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED, enable_events=True, tooltip=
                              'This specifies whether the script will apply reduced graphical settings to the game before starting it.\n'
                              'Some examples of the settings affected are; resolution, framerate limiter, resolution scaling.')],
 
-                [sg.Checkbox('Close seeding process if game closes/crashes',
+                [sg.Checkbox('Close Seeding Process if Game Closes/Crashes',
+                             font=default_text_font,
                              default=config.get(ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED),
                              key=ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED, enable_events=True, tooltip=
                              'Whether the script will close itself should the game be closed, after the script main_seeding_loop logic loop has started\n'
                              "Does not affect regular shutdown if that's the chosen action. ")],
 
-                [sg.Checkbox('Random player threshold',
+                [sg.Checkbox('Use Random Player Threshold',
+                             font=default_text_font,
                              default=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED),
                              key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED, enable_events=True, tooltip=
                              'To increase the spread of when players disconnect. '
                              'Chooses a random integer between the chosen lower and upper bounds.'
                              'By default on. Note that this overrides the manually set player threshold, but this is left as an option should the user'
                              'wish to use their own threshold')],
-                radio_player_action_buttons
+
+                [sg.Frame("Stored script action - Not Implemented Yet", [[radio_button_none, radio_button_close, radio_button_shutdown]])],
 
                 # [sg.Checkbox('Attempt autojoin if already in the game',
                 #              default=config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME),
@@ -322,7 +327,7 @@ def settings_window(config: ScriptConfigFile,
             ])],
 
             [sg.Frame('Threshold of players', [
-                [sg.Text('Note: Random seeding threshold \noverrides these', font=('helvetica', 12))],
+                [sg.Text('Note: Random player threshold \noverrides these', font=default_text_font)],
 
                 [sg.Slider(range=(1, 100), orientation='v', size=(5, 20),
                            default_value=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER),
@@ -339,19 +344,21 @@ def settings_window(config: ScriptConfigFile,
                  [sg.Text('Number of attempts to autojoin')],
 
                  [sg.InputText(key=ConfigKeys.ATTEMPTS_TO_AUTOJOIN_SERVER, size=(5, 5),
+                               font=default_text_font,
                                default_text=config.get(ConfigKeys.ATTEMPTS_TO_AUTOJOIN_SERVER),
                                enable_events=True,
                                tooltip='How many attempts the script will attempt to autojoin the server before giving up')],
 
                  [sg.Text('Game server query interval')],
                  [sg.InputText(key=ConfigKeys.SLEEP_INTERVAL_SECONDS, size=(5, 5),
+                               font=default_text_font,
                                default_text=config.get(ConfigKeys.SLEEP_INTERVAL_SECONDS),
                                enable_events=True,
                                tooltip=
                                "How often the program will try and query the server for player numbers, defined in seconds. "
                                "Default is 60 seconds, but generally shouldn't need to be touched"), sg.Text('Seconds')],
 
-                 [sg.Text('Auto-join delay')],
+                 [sg.Text('Auto-join Delay')],
                  [sg.InputText(key=ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS, size=(5, 5),
                                default_text=config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS), enable_events=True,
                                tooltip=
@@ -362,7 +369,7 @@ def settings_window(config: ScriptConfigFile,
 
     # Defining the right side of the settings window. Mainly contains input fields for paths
     right_col = sg.Column([
-        [sg.Frame('', size=(400, 900), layout=[
+        [sg.Frame('', layout=[
             [sg.Text('Squad game executable', font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.GAME_EXECUTABLE_NAME,
                           default_text=config.get(ConfigKeys.GAME_EXECUTABLE_NAME), enable_events=True)],
@@ -425,15 +432,23 @@ def settings_window(config: ScriptConfigFile,
 
         if event in numerical_events:
             # TODO work on making this more intuitive.
-            if values[event] == "":
+            try:
+                # Updates the window with an integer value if possible, which ensures an integer when saving.
+                values[event] = int(values[event])
+                config.set(event, values[event])
+            except ValueError:
                 window.Element(event).Update(0)
-            else:
-                try:
-                    # Updates the window with an integer value if possible, which ensures an integer when saving.
-                    values[event] = int(values[event])
-                    config.set(event, values[event])
-                except ValueError:
-                    window.Element(event).Update(00)
+
+
+            # if values[event] == "":
+            #     window.Element(event).Update(0)
+            # else:
+            #     try:
+            #         # Updates the window with an integer value if possible, which ensures an integer when saving.
+            #         values[event] = int(values[event])
+            #         config.set(event, values[event])
+            #     except ValueError:
+            #         window.Element(event).Update(0)
 
         # upper_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER]
         # lower_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER]
@@ -453,8 +468,8 @@ def settings_window(config: ScriptConfigFile,
 
         if event == save_key:
             if config != config_initial:
-                log('Settings have been saved')
                 config.save_settings()
+                # log('Settings have been saved')
                 config_initial = deepcopy(config)
 
         elif event == default_key:
@@ -500,8 +515,23 @@ def getting_started_window(text_size=('helvetica', 12)):
     You can click the "Start Seeding Script" button and choose whatever you want to happen when the player number hits its threshold.
     """
 
-    layout = [
+    layout_autojoin = [
         [sg.Text(help_text, font=text_size)],
+        # [sg.Button(f'OK', font=text_size)]
+    ]
+
+    layout_finding_query_port = [
+        sg.Image()
+    ]
+
+
+    layout_tag_group = [
+        [sg.Tab("Autojoin", layout_autojoin)],
+    ]
+
+
+    layout = [
+        [sg.TabGroup(layout_tag_group)],
         [sg.Button(f'OK', font=text_size)]
     ]
     window = sg.Window('Getting Started', layout)
@@ -570,7 +600,7 @@ def test():
 
 if __name__ == '__main__':
     # settings_window(config=ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE))
-    # help_window()
-    test()
+    getting_started_window()
+    # test()
     # getting_started_window()
 

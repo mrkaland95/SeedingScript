@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='AutoSeeding',
-    version='3.0.1',
+    version='3.0.0',
     url='',
     license='BOOST',
     author='Flaxelaxen',
