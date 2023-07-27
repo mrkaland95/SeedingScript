@@ -10,15 +10,14 @@ import threading
 import time
 import keyboard
 import pyautogui
-import ui
 import settings
 import utils
 import autojoin
-
-
+import ui
 from pathlib import Path
 from settings import ConfigKeys, SCRIPT_CONFIG_SETTINGS_FILE, SCRIPT_CONFIG_SETTINGS_FOLDER
 from utils import hibernate, close_process, launch_game, log
+
 
 # LOCAL_APPDATA = Path(os.environ.get('LOCALAPPDATA'))
 # SCRIPT_CONFIG_SETTINGS_FOLDER = LOCAL_APPDATA / 'SeedingScript'
@@ -73,7 +72,7 @@ Features to be added:
 # TODO 9 - Radio buttons for the default user action.
 # TODO 10 - Add new buttons for taking a snapshot of the current settings. Add new button for applying seeding settings.
 # TODO 11 - Window that indicates that an error has happend. For example if there was no server address stored.
-# TODO change the "get player count" button into fetching general info about the server.
+# TODO add ability to lower the program in the system tray.
 
 # class FilePaths:
 #
@@ -124,7 +123,7 @@ def perform_game_launch(config: settings.ScriptConfigFile):
         t = threading.Thread(target=restore_with_delay, name='Restore Settings Thread',
                              kwargs={
                                  'config': config,
-                                 'delay': 90})
+                                 'delay': 120})
         t.start()
 
     launch_game(squad_install, game_url)
@@ -177,7 +176,9 @@ def restore_last_used_settings(config: settings.ScriptConfigFile,
     last_used_config_file = Path(backup_path) / 'GameUserSettingsLastUsed.ini'
     swap_file = backup_path / 'GameUserSettingsSwapFile.ini'
 
-    cmp_swap_to_current = filecmp.cmp(swap_file, current_active_config_file)
+    # cmp_swap_to_current = filecmp.cmp(swap_file, current_active_config_file)
+    if not filecmp.cmp(last_used_config_file, current_active_config_file):
+        shutil.copyfile(last_used_config_file, current_active_config_file)
 
     """
     Beacuse the files are being loaded and changed when squad launches,
@@ -185,13 +186,13 @@ def restore_last_used_settings(config: settings.ScriptConfigFile,
     
     """
 
-    if not cmp_swap_to_current:
-        try:
-            shutil.copyfile(last_used_config_file, current_active_config_file)
-            log('Last used settings have been restored.')
-        except Exception as err:
-            log(err)
-            return
+    # if not cmp_swap_to_current:
+    #     try:
+    #         shutil.copyfile(last_used_config_file, current_active_config_file)
+    #         log('Last used settings have been restored.')
+    #     except Exception as err:
+    #         log(err)
+    #         return
 
 
 # TODO Make sure the user config settings will be restored properly at all points
@@ -324,7 +325,7 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
         perform_user_action(config, game_executable, game_started_by_script, user_action)
         return False
 
-    log(f'Stored player threshold not reached. Continuing with SeedingScript.')
+    log(f'Stored player threshold not reached({current_player_count}). Continuing with SeedingScript.')
 
     settings.init_games_seeding_config()
 
@@ -391,9 +392,9 @@ def reset_seeding_script_process():
 
 def perform_user_action(config, game_executable, game_started_by_script, user_action):
     if user_action == 'hibernate':
-        if not game_started_by_script:  # Restores back to original settings if the game wasn't already started
+        if not game_started_by_script:
+            # Restores back to original settings if the game wasn't already started
             restore_last_used_settings(config)
-            # printf('Settings have been restored.')
         close_process(game_executable)
         hibernate()
         sys.exit()
@@ -469,22 +470,8 @@ def main():
 
 
 
-
-
 if __name__ == '__main__':
-    # config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
-    # ip = config.get(ConfigKeys.SERVER_IP)
-    # port = int(config.get(ConfigKeys.SERVER_QUERY_PORT))
-    # printf(ip)
-    # printf(port)
-    #
-    # printf(utils.player_in_server((ip, port), 'flaxelaxen'))
-    # printf(utils.get_current_playercount((ip, port)))
-
-    # seeding_pipeline('close', config)
-    # autojoin.autojoin_state_machine()
     main()
-    # autojoin
 
 
 

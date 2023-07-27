@@ -33,6 +33,7 @@
           <option value="cv2.COLOR_RGB2BGR" />
           <option value="cv2.cvtColor" />
           <option value="pythoncom.CoInitialize" />
+          <option value="cv2.COLOR_BGR2GRAY" />
         </list>
       </option>
     </inspection_tool>
