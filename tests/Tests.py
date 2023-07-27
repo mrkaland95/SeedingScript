@@ -22,7 +22,7 @@ class TestGUI(unittest.TestCase):
         GUI.main_window()
 
     def test_user_action_window(self):
-        GUI.user_action_window(config)
+        GUI.action_window(config)
 
 
 class TestOCR(unittest.TestCase):
@@ -38,15 +38,15 @@ class TestOCR(unittest.TestCase):
 
 
     def test_get_all_text_on_screen(self):
-        result = autojoin.get_all_text_live()
+        result = autojoin.get_all_text_ocr()
         print(result)
 
     def test_find_current_state(self):
-        res = autojoin.get_all_text_live()
+        res = autojoin.get_all_text_ocr()
         res = autojoin.get_current_state(res)
 
     def test_find_match(self):
-        result = autojoin.get_all_text_live()
+        result = autojoin.get_all_text_ocr()
         test = find_string_on_screen_from_results('find match', result)
 
 

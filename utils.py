@@ -45,6 +45,7 @@ def player_in_server(server_address: tuple[str, int], name: str) -> bool | None:
 
     return in_server
 
+
 def get_info(server_address: tuple[str, int], attempts: int = 3):
     for _ in range(attempts):
         try:
