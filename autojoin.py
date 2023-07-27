@@ -2,10 +2,8 @@ import logging
 import time
 import cv2
 import easyocr
-import keyboard
 import numpy as np
 import pyautogui
-import torch
 import main
 import settings
 import utils
@@ -36,8 +34,11 @@ def reset_windows_menu():
 
     """
 
+
     try:
-        keyboard.press_and_release('windows')
+        # keyboard.press_and_release('windows')
+        key = 'scroll lock'
+        pyautogui.press(key)
         time.sleep(0.5)
         pyautogui.click(x=1920, y=20, button='middle')
     except Exception as err:
@@ -50,8 +51,7 @@ def perform_autojoin(config: ScriptConfigFile, game_started_by_script: bool) -> 
     """
 
     # Some ideally inconsequential key to wake the monitor, in case the monitor is in sleep mode.
-    key = 'scroll lock'
-    pyautogui.press(key)
+
 
     reset_windows_menu()
 
@@ -64,15 +64,16 @@ def perform_autojoin(config: ScriptConfigFile, game_started_by_script: bool) -> 
     game_executable = config.get(ConfigKeys.GAME_EXECUTABLE_NAME)
 
     if not attempt_to_autojoin_if_already_ingame:
-        utils.log('Autojoin while already ingame not enabled\n')
-        utils.log('Checking if the script started the game\n')
+        utils.log('Autojoin while already ingame not enabled')
+        utils.log('Checking if the script started the game')
         if not game_started_by_script:
+            utils.log(f'Game already started. Exiting auto-join process.')
             return False
 
-        utils.log('Script started the game, attempting autojoin\n')
+        utils.log('Script started the game, attempting auto-join')
     else:
-        utils.log('Autojoin while in-game enabled.\n')
-        utils.log('Attempting to autojoin\n')
+        utils.log('Autojoin while in-game enabled.')
+        utils.log('Attempting to autojoin')
 
     for i in range(config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS), 0, -1):
         utils.log(f'Attempting to autojoin in {i} seconds\n')
@@ -88,17 +89,15 @@ def perform_autojoin(config: ScriptConfigFile, game_started_by_script: bool) -> 
         main.reset_seeding_script_process()
         return False
 
-    # TODO add or find some sort of check to see if the window is in the foreground.
     utils.process_running(game_executable)
     force_window_to_foreground(find_window_hwnd())
-    users_game_width, users_game_height = find_window_size(find_window_hwnd())
-    if users_game_width is None or users_game_height is None:
-        utils.log('The script likely tried to fetch your game resolution before the game had started properly\n')
-        utils.log('A possible remedy for this might be an increase to your delay " in the config file.\n')
-        time.sleep(15)
+    # users_game_width, users_game_height = find_window_size(find_window_hwnd())
+    # if users_game_width is None or users_game_height is None:
+    #     utils.log('The script likely tried to fetch your game resolution before the game had started properly')
+    #     utils.log('A possible remedy for this might be an increase to your delay " in the config file.')
+    #     time.sleep(15)
 
     return autojoin_state_machine(config)
-
 
 
 class OCRResult:
@@ -186,10 +185,9 @@ def autojoin_state_machine(config: ScriptConfigFile) -> bool:
     address = config.get_server_address()
     name = config.get(ConfigKeys.PLAYER_NAME)
     attempts = 0
-    limit = 5
+    limit = 7
     last_state: AutoJoinStates = AutoJoinStates.UNKNOWN
-    current_state: AutoJoinStates = AutoJoinStates.UNKNOWN
-
+    reader = easyocr.Reader(['en'], gpu=False, verbose=False)
 
     while True:
         if main.STOP_SEEDINGSCRIPT:
@@ -199,36 +197,33 @@ def autojoin_state_machine(config: ScriptConfigFile) -> bool:
             utils.log(f'Game not running, exiting auto-join process.')
             return False
 
-        result = get_all_text_live()
-
         player_in_server = utils.player_in_server(server_address=address, name=name)
         if player_in_server:
-            current_state = AutoJoinStates.IN_SERVER
+            utils.log('Joined the server successfully. Exiting the autojoin process.')
+            break
 
         force_window_to_foreground(find_window_hwnd())
+        time.sleep(1)
+        result = get_all_text_ocr(reader)
+        current_state, button_to_click = get_current_state(config, result)
+        utils.log(f'Current state of autojoining is: {current_state.name}')
 
         if current_state is AutoJoinStates.IN_SERVER:
             utils.log('Joined the server successfully. Exiting the autojoin process.')
             break
 
-        if not utils.process_running(config.get(ConfigKeys.GAME_EXECUTABLE_NAME)):
-            utils.log(f'Game not running, exiting auto-join process.')
-            return False
-
-        current_state, OCR_result_to_click = get_current_state(config, result)
-        utils.log(f'Current state of autojoining is: {current_state.name}')
-
-        if OCR_result_to_click is None or current_state is AutoJoinStates.UNKNOWN:
+        if current_state is AutoJoinStates.UNKNOWN:
             attempts += 1
-            time.sleep(20)
+            time.sleep(5)
 
         elif current_state is AutoJoinStates.FOUND_SERVER:
             utils.process_running(config.get(ConfigKeys.GAME_EXECUTABLE_NAME))
-            pyautogui.doubleClick(OCR_result_to_click.x, OCR_result_to_click.y, interval=0.05)
+            pyautogui.doubleClick(button_to_click.x, button_to_click.y, interval=0.06)
             utils.log('Clicked on server, waiting to see if the join was successful.')
         else:
-            if OCR_result_to_click:
-                pyautogui.click(OCR_result_to_click.x, OCR_result_to_click.y)
+            if button_to_click:
+                pyautogui.click(button_to_click.x, button_to_click.y)
+                pyautogui.moveRel(0, 70)
 
         if attempts >= limit:
             utils.log(f'Exceeded amount of autojoin attempts. ({attempts} attempts)')
@@ -252,8 +247,7 @@ def find_string_on_screen_from_results(strings: list[OCRResult], text: str) -> O
     return None
 
 
-def get_all_text_live() -> list[OCRResult]:
-    # Take a screenshot
+def get_all_text_ocr(reader: easyocr.Reader) -> list[OCRResult]:
     screenshot = pyautogui.screenshot()
 
     # Convert the PIL Image to OpenCV format (numpy array)
@@ -261,11 +255,8 @@ def get_all_text_live() -> list[OCRResult]:
 
     gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
 
-    # Initialize EasyOCR reader
-    reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
-
     # Perform OCR using EasyOCR
-    result = reader.readtext(gray_screenshot, detail=1)
+    result = reader.readtext(gray_screenshot, detail=1, batch_size=5)
 
     results = []
 
