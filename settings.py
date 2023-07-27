@@ -147,7 +147,6 @@ class ScriptConfigFile:
         return self.get(ConfigKeys.SERVER_IP), int(self.get(ConfigKeys.SERVER_QUERY_PORT))
 
     def save_settings(self):
-        # log(f'Saving settings to path: {self.config_path}')
         log('Settings have been saved')
 
         with open(self.config_path, 'w') as f:
@@ -172,7 +171,7 @@ class UserActions(StrEnum):
 
 def generate_initial_config(file_path: Path):
     """
-    Careful, this not *not* check if the file already exists, and will overwrite.
+    Careful, this will *not* check if the file already exists, and will overwrite.
     """
     with open(file_path, 'w') as f:
         dump(initial_config(), f, indent=4)
