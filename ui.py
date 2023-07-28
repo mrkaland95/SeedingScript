@@ -98,7 +98,7 @@ def main_window(chosen_action: str | None,
     multiline_panel_key = 'multiline'
     settings_folder_key = 'Open Settings Folder'
     squad_settings_folder_key = 'Open Squads Settings Folder'
-    get_info_key = 'Get server info'
+    get_info_key = 'Get Server Info'
 
     # Defines the elements and layout of the top menu of the window. This is a bit wack, but it's how it works.
     menu_def = [
@@ -152,11 +152,11 @@ def main_window(chosen_action: str | None,
         [left_col]
     ]
 
-    window = sg.Window('SeedingScript', layout, font=element_font, resizable=True, size=(1300, 1000),
-                       finalize=True)
+    window = sg.Window('SeedingScript', layout, font=element_font, resizable=False, finalize=True)
 
-    window.TKroot.minsize(1000, 1000)
-    window.TKroot.maxsize(1500, 1000)
+
+    # window.TKroot.minsize(1000, 1000)
+    # window.TKroot.maxsize(1500, 1000)
 
     while True:
         event, values = window.read(timeout=150)
@@ -195,10 +195,14 @@ def main_window(chosen_action: str | None,
             # player_count = utils.get_current_playercount(address)
             info = utils.get_info(address)
             if info is not None:
-                log(f'Server Name: {info.server_name}')
-                log(f'Player Count: {info.player_count}')
-                log(f'Layer: {info.map_name}')
-                log(f'NOTE: The player count is unreliable at higher player numbers, and is often shown to be too high compared to what it really is.')
+                log(f'\n'
+                    f'Server Name: {info.server_name}\n'
+                    '\n'
+                    f'Layer: {info.map_name}\n'
+                    '\n'
+                    f'Player Count: {info.player_count}\n'
+                    '\n'
+                    f'NOTE: The player count is unreliable at higher player numbers, and is often shown to be too high compared to what it really is.')
             else:
                 log(f'Script was unable to fetch info from the server. Check your connection or that the stored IP and Query Port are correct.')
 
@@ -217,15 +221,15 @@ def main_window(chosen_action: str | None,
         # This makes it easy to check avoid launching multiple instances of the same process.
         if event == stop_seeding_key:
             if not main.SEEDING_PROCESS:
-                log('No active seeding process.')
+                log('No active seeding thread.')
                 continue
 
             if main.SEEDING_PROCESS.is_alive():
                 main.STOP_SEEDINGSCRIPT = True
 
-                # TODO add the ability to kill the seeding process again.
-                log('Seeding process is currently running, sending signal to stop.')
-                log('This is not fully implemented yet. If it does not stop within the desired time, close the main window.')
+                log('Seeding process is currently running, sending signal to stop.\n'
+                    'This has not been fully tested yet. The thread may take some time to stop, depending on what it is doing. '
+                    'If it does not stop within about a minute at the most, close the main window.')
 
     # Frees up the resources used by the window once the while loop has been broken out of
     window.close()
@@ -309,13 +313,12 @@ def settings_window(config: ScriptConfigFile,
                              'By default on. Note that this overrides the manually set player threshold, but this is left as an option should the user'
                              'wish to use their own threshold')],
 
+                [sg.Checkbox('Attempt autojoin if already in the game',
+                             default=config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME),
+                             key=ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME, enable_events=True, tooltip=
+                             "Specifies whether the script will attempt to autojoin the desired server, regardless of the user already being in-game")],
+
                 [sg.Frame("Stored script action - Not Implemented Yet", layout=[[radio_button_none, radio_button_close, radio_button_shutdown]], font=default_text_font,)],
-
-                # [sg.Checkbox('Attempt autojoin if already in the game',
-                #              default=config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME),
-                #              key=ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME, enable_events=True, tooltip=
-                #              "Specifies whether the script will attempt to autojoin the desired server, regardless of the user already being in-game")],
-
                 # [sg.Checkbox('Attempt rejoin if disconnected',
                 #              default=config.get(ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER),
                 #              key=ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER, enable_events=True, tooltip=
@@ -412,18 +415,23 @@ def settings_window(config: ScriptConfigFile,
          [left_col, right_col],
          [sg.Button('Save', key=save_key), sg.Button('Reset to defaults', key=default_key), sg.Button('Open Script Settings Folder', key=settings_key)]]
 
-    window = sg.Window('Settings', layout, font=default_text_font, resizable=True, finalize=True)
 
     # I've decided to this to enforce the numerical fields actually being numbers
     numerical_events = [ConfigKeys.PLAYER_THRESHOLD, ConfigKeys.SERVER_QUERY_PORT,
                         ConfigKeys.SLEEP_INTERVAL_SECONDS, ConfigKeys.ATTEMPTS_TO_AUTOJOIN_SERVER,
                         ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS]
 
+    window = sg.Window('Settings', layout, font=default_text_font, resizable=False, finalize=True, element_justification='c')
     # Event loop
     while True:
         event, values = window.Read(timeout=75)
 
         if event in ('Exit', sg.WIN_CLOSED):
+            if config_initial != config:
+                if save_prompt():
+                    config.save_settings()
+                    config_initial = deepcopy(config)
+
             break
 
         elif main.PROGRAM_SHUTDOWN:
@@ -515,28 +523,38 @@ def getting_started_window(text_size=('helvetica', 12)):
     Do note however, that the script is going to attempt to force 
     """
 
-    features_text = """
+    autojoin_notes_text = """
+    Note: The autojoin functionality utilizes Optical Character Recognition (OCR) to connect to a server.
+
+    There are some important aspects to consider. In order for this feature to work,
+    The script needs to take screenshots of your screen to detect the position of the required buttons that it needs to click. 
+    Rest assured, each screenshot are only temporarily stored in memory for a few seconds until the buttons are detected, 
+    and they are completely erased from the system after the autojoin process is either completed or cancelled.
     
-    
+    However, I understand that there might be some reservations about this approach, which is why I have made the code open source.
+
+    Another quirk with this process is that it uses a substantial amount of CPU resources throughout the duration of the autojoin process,
+    due to the high computational requirements of OCR. Lastly, the script will also attempt to bring the window to the foreground to ensure that the necessary buttons are visible.
+
+    If you feel uncomfortable with any of these quirks, you have the option to disable the auto-join feature in the settings.
     """
 
 
-    layout_autojoin = [
+    layout_autojoin_howto = [
         [sg.Text(help_text, font=text_size)],
-        # [sg.Button(f'OK', font=text_size)]
     ]
 
     layout_finding_query_port = [
-
         [sg.Image(server_and_query_port_help)]
     ]
 
-    layout_features = [
-        []
+    layout_autojoin_warning = [
+        [sg.Text(autojoin_notes_text, font=text_size)]
     ]
 
     layout_tag_group = [
-        [sg.Tab("Autojoin", layout_autojoin)],
+        [sg.Tab("Autojoin Warning", layout_autojoin_warning)],
+        [sg.Tab("Setting Up Autojoin", layout_autojoin_howto)],
         [sg.Tab("How to find query port", layout_finding_query_port)],
     ]
 
@@ -579,37 +597,42 @@ def save_prompt(window_theme: str = DEFAULT_WINDOW_THEME,
                 element_font: tuple[str, int] = DEFAULT_GUI_FONT):
     sg.theme(window_theme)
 
-    yes_key = '-YES-'
-    no_key = '-NO-'
+    save_key = '-YES-'
+    exit_key = '-NO-'
 
+    result = True
     layout = [
         [sg.Text('There are unsaved changes. Do you want to save them before exiting?')],
-        [sg.Button('Save and Exit', key=yes_key), sg.Button('Exit without saving', key=no_key)]]
+        [sg.Button('Save and Exit', key=save_key), sg.Button('Exit without saving', key=exit_key)]]
 
-    window = sg.Window('Do you wish to save unsaved changes?', layout, size=(300, 300))
+    window = sg.Window('Do you wish to save unsaved changes?', layout, element_justification='c')
 
     while True:
         event, values = window.read(timeout=150)
 
-        if event in ('Exit', sg.WIN_CLOSED):
-            main.PROGRAM_SHUTDOWN = True
+        if event in ('Exit', sg.WIN_CLOSED, exit_key):
+            # main.PROGRAM_SHUTDOWN = True
+            result = False
             break
 
-        elif event == yes_key:
-            pass
+        # elif event == exit_key:
+        #     result = False
+        #     break
 
-        elif event == no_key:
-            pass
+        elif event == save_key:
+            result = True
+            break
 
     window.close()
+    return result
 
-def test():
+def main_test():
     main_window(DEFAULT_WINDOW_THEME)
 
 
 if __name__ == '__main__':
     # settings_window(config=ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE))
     # getting_started_window()
-    test()
+    main_test()
     # getting_started_window()
 

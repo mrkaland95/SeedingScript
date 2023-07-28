@@ -105,6 +105,7 @@ class ConfigKeys(StrEnum):
     DEFAULT_USER_ACTION = auto()
     LIGHTWEIGHT_SETTINGS_CURRENTLY_APPLIED = auto()
     PREVIOUSLY_LAUNCHED_SEEDINGSCRIPT = auto()
+    DONT_START_GAME_IF_SERVER_ABOVE_THRESHOLD = auto()
 
 
 class ScriptConfigFile:
@@ -287,7 +288,13 @@ def initial_config():
         ConfigKeys.PREVIOUSLY_LAUNCHED_SEEDINGSCRIPT: {
             VALUE_KEY: False,
             DESCRIPTION_KEY: 'This is here to have a consistent variable to see if a user has had their settings restored'
+        },
+        ConfigKeys.DONT_START_GAME_IF_SERVER_ABOVE_THRESHOLD: {
+            VALUE_KEY: True,
+            DESCRIPTION_KEY: "Setting to specify if the script should still launch the game if the server is already above the player threshold."
         }
+
+
     }
 
     return seedingscript_config

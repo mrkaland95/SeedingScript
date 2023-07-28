@@ -62,17 +62,14 @@ Features to be added:
 - If 
 """
 # TODO 1 - Graph that charts the player count over time.
-# TODO 2 - Add flags that get periodically checked in the seeding pipeline, so the thread can exit gracefully.
-# TODO 3 - Add a new thread that can independently kill the thread when the autojoin process is being performed.
 # TODO 4 - Add profiles for switching between settings for different servers.
 # TODO 5 - Add new states for being in queue, for rejoining a server, and for joining a modded server, in settings.
 # TODO 6 - Add a check/window for the server address if the script is started headless.
-# TODO 7 - Make sure script threads are killed properly if start_seedingscript_remote window is closed.
 # TODO 8 - Maybe add the possibility to add a shortcut to the start menu.
-# TODO 9 - Radio buttons for the default user action.
 # TODO 10 - Add new buttons for taking a snapshot of the current settings. Add new button for applying seeding settings.
 # TODO 11 - Window that indicates that an error has happend. For example if there was no server address stored.
 # TODO add ability to lower the program in the system tray.
+# TODO Make a virtual environment(venv) so that only the necessary packages are included in the build.
 
 # class FilePaths:
 #
@@ -123,7 +120,7 @@ def perform_game_launch(config: settings.ScriptConfigFile):
         t = threading.Thread(target=restore_with_delay, name='Restore Settings Thread',
                              kwargs={
                                  'config': config,
-                                 'delay': 120})
+                                 'delay': 150})
         t.start()
 
     launch_game(squad_install, game_url)
@@ -178,6 +175,7 @@ def restore_last_used_settings(config: settings.ScriptConfigFile,
 
     # cmp_swap_to_current = filecmp.cmp(swap_file, current_active_config_file)
     if not filecmp.cmp(last_used_config_file, current_active_config_file):
+        log('Restoring last used settings')
         shutil.copyfile(last_used_config_file, current_active_config_file)
 
     """
@@ -201,35 +199,6 @@ def restore_last_used_settings(config: settings.ScriptConfigFile,
 def restore_with_delay(config: settings.ScriptConfigFile, delay: float):
     time.sleep(delay)
     restore_last_used_settings(config)
-
-
-def restore_last_used_settings_plain(config: settings.ScriptConfigFile):
-    """
-    Restores user's original config file to the game when called
-    :return:
-    """
-
-    if not config:
-        config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
-
-    squad_game_config_path = config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH)
-
-    backup_folder_path = os.path.abspath(f'{squad_game_config_path}\Backup')
-    current_active_config_file = os.path.abspath(f'{squad_game_config_path}\GameUserSettings.ini')
-    last_used_config_file = os.path.abspath(f'{backup_folder_path}\GameUserSettingsLastUsed.ini')
-    swap_file = os.path.abspath(f'{backup_folder_path}\GameUserSettingsSwapFile.ini')
-
-    try:
-        shutil.copyfile(last_used_config_file, current_active_config_file)
-        log('Last used settings have been restored')
-        config.set(ConfigKeys.LIGHTWEIGHT_SETTINGS_CURRENTLY_APPLIED, False)
-        with open(SCRIPT_CONFIG_SETTINGS_FILE, 'w') as f:
-            json.dump(config, f, indent=4)
-
-    except Exception as error:
-        log(error)
-        log("This likely happened because seeding settings have not been enabled yet in your config file")
-        log("Or, the path to the game's config folder is incorrectly set")
 
 
 def restore_original_settings(config: settings.ScriptConfigFile):
@@ -291,7 +260,7 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
     """
     global SEEDING_PROCESS
 
-    # TODO make this work again.
+    # TODO make the reconnect functionality work again.
     reconnect_counter = 0
     game_started_by_script = False
     player_threshold_not_hit = True
@@ -309,6 +278,11 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
     else:
         player_threshold = config.get(ConfigKeys.PLAYER_THRESHOLD)
 
+    if STOP_SEEDINGSCRIPT:
+        utils.log(f'AutoSeeding shutdown flag detected. Exiting AutoSeeding thread.')
+        reset_seeding_script_process()
+        return False
+
     no_startup_if_server_full = True
     log(f'Checking player count before starting the SeedingScript')
     current_player_count = utils.get_current_playercount(server_address)
@@ -322,7 +296,7 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
     if (current_player_count >= player_threshold) and no_startup_if_server_full:
         log(f'The threshold was already met; players {current_player_count} - Threshold: {player_threshold}. Exiting SeedingScript.')
-        perform_user_action(config, game_executable, game_started_by_script, user_action)
+        execute_player_action(config, game_executable, game_started_by_script, user_action)
         return False
 
     log(f'Stored player threshold not reached({current_player_count}). Continuing with SeedingScript.')
@@ -331,14 +305,28 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
     game_started_by_script = perform_game_launch(config)
 
+    if STOP_SEEDINGSCRIPT:
+        utils.log(f'AutoSeeding shutdown flag detected. Exiting AutoSeeding thread.')
+        reset_seeding_script_process()
+        return False
+
     if game_started_by_script and should_attempt_to_autojoin:
         # Delay from when the game was started
+        log(f'Game was started by script and autojoin enabled. Starting autojoin.')
         time.sleep(config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS))
         autojoin_result = autojoin.perform_autojoin(config, game_started_by_script)
         if not autojoin_result:
             log('Autojoin failed, closing the game.')
             utils.close_process(game_executable)
-            return
+            return False
+
+    elif not game_started_by_script and should_attempt_to_autojoin:
+        if config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME):
+            autojoin_result = autojoin.perform_autojoin(config, game_started_by_script)
+            if not autojoin_result:
+                log('Autojoin failed. Exiting Seeding Thread.')
+                # utils.close_process(game_executable)
+                return False
 
     if not perform_main_seeding_loop:
         return
@@ -348,9 +336,8 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
     # Main seeding loop.
     while player_threshold_not_hit:
-
         if STOP_SEEDINGSCRIPT:
-            utils.log(f'AutoSeeding shutdown flag registered. Shutting down.')
+            utils.log(f'AutoSeeding shutdown flag detected. Exiting AutoSeeding thread.')
             reset_seeding_script_process()
             return False
 
@@ -379,7 +366,7 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
         time.sleep(sleep_interval_seconds)
 
-    perform_user_action(config, game_executable, game_started_by_script, user_action)
+    execute_player_action(config, game_executable, game_started_by_script, user_action)
     reset_seeding_script_process()
 
 
@@ -390,7 +377,7 @@ def reset_seeding_script_process():
     SEEDING_PROCESS = None
 
 
-def perform_user_action(config, game_executable, game_started_by_script, user_action):
+def execute_player_action(config, game_executable, game_started_by_script, user_action):
     if user_action == 'hibernate':
         if not game_started_by_script:
             # Restores back to original settings if the game wasn't already started
@@ -418,11 +405,7 @@ def restore_if_started_by_script(config: settings.ScriptConfigFile, game_started
 
 def launch_seeding_thread(config, user_action):
     global SEEDING_PROCESS
-    # app.SEEDING_PROCESS = multiprocessing.Process(target=app.seeding_pipeline, daemon=True,
-    #                                               kwargs={
-    #                                                   'user_action': desired_useraction,
-    #                                                   'config': config})
-    #
+
     SEEDING_PROCESS = threading.Thread(target=seeding_pipeline,
                                            daemon=True,
                                            kwargs={
@@ -445,7 +428,6 @@ def main():
         settings.generate_initial_config(SCRIPT_CONFIG_SETTINGS_FILE)
 
     config = settings.ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
-
 
     previously_launched = config.get(ConfigKeys.PREVIOUSLY_LAUNCHED_SEEDINGSCRIPT)
     log(previously_launched)

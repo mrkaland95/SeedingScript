@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 import cv2
 import easyocr
@@ -10,6 +11,9 @@ import utils
 from settings import ScriptConfigFile, ConfigKeys, SCRIPT_CONFIG_SETTINGS_FILE, EXIT_SEEDING_LOOP
 from utils import force_window_to_foreground, find_window_hwnd, find_window_size
 from enum import Enum, auto
+
+
+MODEL_DATA = './assets/model_data'
 
 
 class AutoJoinStates(Enum):
@@ -40,18 +44,16 @@ def reset_windows_menu():
         key = 'scroll lock'
         pyautogui.press(key)
         time.sleep(0.5)
-        pyautogui.click(x=1920, y=20, button='middle')
+        pyautogui.click(x=1920 // 2, y=20, button='middle')
     except Exception as err:
         logging.warning(f'{err} \n')
+
 
 
 def perform_autojoin(config: ScriptConfigFile, game_started_by_script: bool) -> bool:
     """
     Function that is responsible for joining a server. Takes in a config file to get it's needed parameters.
     """
-
-    # Some ideally inconsequential key to wake the monitor, in case the monitor is in sleep mode.
-
 
     reset_windows_menu()
 
@@ -89,13 +91,8 @@ def perform_autojoin(config: ScriptConfigFile, game_started_by_script: bool) -> 
         main.reset_seeding_script_process()
         return False
 
-    utils.process_running(game_executable)
+    # utils.process_running(game_executable)
     force_window_to_foreground(find_window_hwnd())
-    # users_game_width, users_game_height = find_window_size(find_window_hwnd())
-    # if users_game_width is None or users_game_height is None:
-    #     utils.log('The script likely tried to fetch your game resolution before the game had started properly')
-    #     utils.log('A possible remedy for this might be an increase to your delay " in the config file.')
-    #     time.sleep(15)
 
     return autojoin_state_machine(config)
 
@@ -110,7 +107,6 @@ class OCRResult:
 
 
 def get_current_state(config: ScriptConfigFile, ocr_result: list[OCRResult]) -> tuple[AutoJoinStates, OCRResult | None]:
-    current_state = AutoJoinStates.UNKNOWN
 
     main_menu_to_server_browser_string = 'servers'
     server_browser_string = 'server browser'
@@ -120,13 +116,21 @@ def get_current_state(config: ScriptConfigFile, ocr_result: list[OCRResult]) -> 
     reconnect_string = 'reconnect'
     find_match_string = 'find match'
     in_queue_string = 'in_queue'
+
+    server_str = 'server'
+    rules_str = 'rules'
+    game_mode_info_str = 'game mode info'
+    continue_str = 'continue'
+    disconnect_str = 'disconnect'
+    exit_str = 'exit'
+    leave_str = 'leave'
+    queue_str = 'queue'
     server_name_string = config.get(ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN)
-    server_rules_string = 'server'
-    server_rules_string = 'rules'
-    game_mode_info_string = 'game mode info'
-    continue_string = 'continue'
-    disconnect_string = 'disconnect'
-    exit_string = 'exit'
+
+
+
+    split_server = server_name_string.split(" ")
+
 
     button_to_click = None
     find_match_res = find_string_on_screen_from_results(ocr_result, find_match_string)
@@ -136,23 +140,31 @@ def get_current_state(config: ScriptConfigFile, ocr_result: list[OCRResult]) -> 
     filter_res = find_string_on_screen_from_results(ocr_result, filter_string)
     main_menu_res = find_string_on_screen_from_results(ocr_result, main_menu_to_server_browser_string)
     server_name_res = find_string_on_screen_from_results(ocr_result, server_name_string)
-    server_res = find_string_on_screen_from_results(ocr_result, server_rules_string)
-    rules_res = find_string_on_screen_from_results(ocr_result, server_rules_string)
-    continue_res = find_string_on_screen_from_results(ocr_result, continue_string)
+    server_res = find_string_on_screen_from_results(ocr_result, server_str)
+    rules_res = find_string_on_screen_from_results(ocr_result, rules_str)
+    continue_res = find_string_on_screen_from_results(ocr_result, continue_str)
+    leave_res = find_string_on_screen_from_results(ocr_result, leave_str)
+    queue_res = find_string_on_screen_from_results(ocr_result, queue_str)
+
 
     server_address = (config.get(ConfigKeys.SERVER_IP), config.get(ConfigKeys.SERVER_QUERY_PORT))
 
     # States/Conditions.
+    in_server = utils.player_in_server(server_address, config.get(ConfigKeys.PLAYER_NAME)) or (server_res and rules_res) or continue_res
     found_server = server_name_res and in_server_browser_res and favourites_res
     # We know we are in the favourites tab if we can see the server browser tabs, favourites tabs, but not the filter box
     # This is beacuse the filter box is unique to the server browser and custom browser tab.
     in_favourites = in_server_browser_res and favourites_res and not filter_res
     in_main_menu = main_menu_res and find_match_res
     in_server_browser = in_server_browser_res and filter_res
-    in_game = utils.player_in_server(server_address, config.get(ConfigKeys.PLAYER_NAME)) or (server_res and rules_res) or continue_res
+    in_queue = leave_res and queue_res
 
-    if in_game:
+    if in_server:
         current_state = AutoJoinStates.IN_SERVER
+        button_to_click = None
+
+    elif in_queue:
+        current_state = AutoJoinStates.IN_QUEUE
         button_to_click = None
 
     elif found_server:
@@ -187,7 +199,14 @@ def autojoin_state_machine(config: ScriptConfigFile) -> bool:
     attempts = 0
     limit = 7
     last_state: AutoJoinStates = AutoJoinStates.UNKNOWN
-    reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+
+    if getattr(sys, 'frozen', False):
+        model_directory = "./model_data"
+    else:
+        model_directory = "./assets/model_data"
+
+    reader = easyocr.Reader(['en'], gpu=False, verbose=False, model_storage_directory=model_directory)
+
 
     while True:
         if main.STOP_SEEDINGSCRIPT:
@@ -204,17 +223,21 @@ def autojoin_state_machine(config: ScriptConfigFile) -> bool:
 
         force_window_to_foreground(find_window_hwnd())
         time.sleep(1)
-        result = get_all_text_ocr(reader)
-        current_state, button_to_click = get_current_state(config, result)
+        ocr_results = get_all_text_ocr(reader)
+        current_state, button_to_click = get_current_state(config, ocr_results)
         utils.log(f'Current state of autojoining is: {current_state.name}')
 
         if current_state is AutoJoinStates.IN_SERVER:
             utils.log('Joined the server successfully. Exiting the autojoin process.')
             break
 
-        if current_state is AutoJoinStates.UNKNOWN:
+        elif current_state is AutoJoinStates.UNKNOWN:
             attempts += 1
             time.sleep(5)
+
+        elif current_state is AutoJoinStates.IN_QUEUE:
+            delay = 30
+            utils.log(f'In queue. Waiting for {delay} seconds before checking again.')
 
         elif current_state is AutoJoinStates.FOUND_SERVER:
             utils.process_running(config.get(ConfigKeys.GAME_EXECUTABLE_NAME))
@@ -227,6 +250,7 @@ def autojoin_state_machine(config: ScriptConfigFile) -> bool:
 
         if attempts >= limit:
             utils.log(f'Exceeded amount of autojoin attempts. ({attempts} attempts)')
+            utils.log(f'Exiting the autojoin state machine.')
             return False
 
         if current_state == last_state:
@@ -240,6 +264,16 @@ def autojoin_state_machine(config: ScriptConfigFile) -> bool:
 
 
 def find_string_on_screen_from_results(strings: list[OCRResult], text: str) -> OCRResult | None:
+    """
+    Function responsible for finding a string inside of an OCRResult object(i.e a piece of text and it's position)
+
+    @param strings:
+    @param text:
+    @return:
+    """
+    # TODO functionality that can take in a list of strings to be found, where the position will be averaged out, given a maximum distance
+
+    max_pixel_distance = 100
     for item in strings:
         if text.lower() in item.text.lower():
             return item
@@ -256,7 +290,7 @@ def get_all_text_ocr(reader: easyocr.Reader) -> list[OCRResult]:
     gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
 
     # Perform OCR using EasyOCR
-    result = reader.readtext(gray_screenshot, detail=1, batch_size=5)
+    result = reader.readtext(gray_screenshot, detail=1, batch_size=10)
 
     results = []
 
