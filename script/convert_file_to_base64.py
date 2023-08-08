@@ -1,6 +1,6 @@
 import base64
-input_file = "../assets/model_data/english_g2.pth"
-output_file = "../assets/model_data_encoded/model_data.py"
+input_file = "../assets/images/seed.png"
+output_file = "../assets/seed_data.pyw"
 
 
 def main():

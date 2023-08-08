@@ -1,8 +1,12 @@
+import glob
+import json
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import time
+
 import a2s.exceptions
 import a2s
 import psutil
@@ -10,12 +14,49 @@ import pyautogui
 import pythoncom
 import win32com.client
 import win32gui
+from pathlib import Path
+from datetime import datetime
 from a2s import players
+from json import dump
+
+from constants import SCRIPT_CONFIG_SETTINGS_FOLDER, LOG_FOLDER, LOGFILE
 
 
-def log(string: str):
-    # current_time = time.strftime(time.localtime())
-    print(f'{get_formatted_local_time()} - {string}\n')
+def log(string: str, write_to_file_only=False):
+    """
+    Basic logging function. I was originally using the python inbuilt logging module, however this was not playing nice with the GUI.
+    So I ended up having to make my own custom logging functionality.
+    """
+    print_message = f'{get_formatted_local_time()} - {string}\n'
+    logfile_message = f'[{get_formatted_utc_time()}]_[LOG]: {string}\n'
+
+    if not write_to_file_only:
+        print(print_message)
+
+    with open(LOGFILE, 'a') as f:
+        f.write(logfile_message)
+
+
+def init_logfile():
+    """Iniiates the log file at the beginning of each run of the script."""
+    if not LOG_FOLDER.exists():
+        os.makedirs(LOG_FOLDER)
+
+    with open(LOGFILE, 'w') as f:
+        f.write("")
+
+    log(f"Logfile start", True)
+    # delete_old_logfiles(LOG_FOLDER, MAX_LOGFILES)
+
+
+def delete_old_logfiles(log_directory, max_files):
+    log_files = glob.glob(os.path.join(log_directory, '*.log'))
+    if len(log_files) > max_files:
+        sorted_log_files = sorted(log_files, key=os.path.getctime)
+        files_to_delete = sorted_log_files[:len(log_files) - max_files]
+        for file_to_delete in files_to_delete:
+            os.remove(file_to_delete)
+
 
 def get_formatted_local_time():
     """
@@ -23,6 +64,11 @@ def get_formatted_local_time():
     """
     now = time.localtime()
     return time.strftime("%Y/%m/%d - %H:%M:%S", now)
+
+
+def get_formatted_utc_time():
+    now = datetime.utcnow()
+    return now.strftime("%Y/%m/%d - %H:%M:%S")
 
 
 def player_in_server(server_address: tuple[str, int], name: str) -> bool | None:
@@ -40,7 +86,7 @@ def player_in_server(server_address: tuple[str, int], name: str) -> bool | None:
         in_server = None
 
     except Exception as err:
-        print(err)
+        log(err)
         in_server = None
 
     return in_server
@@ -51,9 +97,16 @@ def get_info(server_address: tuple[str, int], attempts: int = 3):
         try:
             info = a2s.info(address=server_address)
             return info
-        except a2s.BufferExhaustedError:
+
+        except a2s.BufferExhaustedError as err:
+            log(f'Buffer Exhausted Error')
+            log(f'Err data {err.__str__()}')
             return None
+
         except Exception as err:
+            log(f'Error when trying to retrieve info from the server.', True)
+            log(f'Error type: {type(err).__name__}')
+            log(err.__str__(), True)
             return None
 
 
@@ -86,6 +139,25 @@ def get_info(server_address: tuple[str, int], attempts: int = 3):
 #     return len(players_in_server)
 
 
+def backup_all_game_settings(game_config_folder: Path):
+    now = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+    backup_folder = SCRIPT_CONFIG_SETTINGS_FOLDER / 'GameSettingsBackup'
+    destination_folder = backup_folder / f'GameSettingsSnapshot_{now}'
+
+    if not destination_folder.exists():
+        destination_folder.mkdir()
+
+    try:
+        for filename in os.listdir(game_config_folder):
+            file_path = os.path.join(game_config_folder, filename)
+
+            # We are only interested in files, not subdirectories
+            if os.path.isfile(file_path):
+                shutil.copy(file_path, destination_folder)  # copies file to destination directory
+
+    except PermissionError as err:
+        log('Something went wrong when trying to create backup of a file, some of the files may have been copied, but not all')
+        log(err.__str__(), True)
 
 
 def shutdown_computer():
@@ -117,8 +189,9 @@ def process_running(executable):
         game_running = executable in (p.name() for p in psutil.process_iter())
         return game_running
     except Exception as error:
-        print(error)
-        print("Something went wrong in finding the game process")
+        log("Something went wrong in finding the game process, writing error to log file.")
+        log(f'Error type: {error.__class__}')
+        log(error.__str__(), True)
 
 
 def find_window_size(hwnd) -> (int, int):
@@ -153,11 +226,11 @@ def force_window_to_foreground(window_handle):
         win32gui.ShowWindow(window_handle, 9)
         return window_handle
     except Exception as error:
-        logging.warning(error)
-        logging.warning(
-            'The script was likely unable to either find the game window handle, or force the window to top')
-        logging.warning(
-            'This could possibly be a permission issue. For example if the "Start" menu was active as the top window.')
+        # TODO implement more specific handling for this when which types of error can occur are shown.
+        log(f'The script was likely unable to either find the game window handle, or force the window to top')
+        log(f'This could possibly be a permission issue. For example if the "Start" menu was active as the top window.')
+        log(f'Writing stacktrace to log, error type {error.__class__}')
+        log(error.__str__(), True)
 
 
 def get_screen_resolution() -> (int, int):
@@ -172,6 +245,7 @@ def get_screen_resolution() -> (int, int):
         print(err)
         print("Error when trying to find the user's resolution size")
         return 1920, 1080
+
 
 def find_window_hwnd(window_name_target: str = 'SquadGame'):
     """
@@ -194,28 +268,13 @@ def find_window_hwnd(window_name_target: str = 'SquadGame'):
         return None
 
 
-# def get_all_text_on_screen():
-#     # Take a screenshot
-#     screenshot = pyautogui.screenshot()
-#
-#     # Convert the PIL Image to OpenCV format (numpy array)
-#     screenshot = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-#
-#     # Initialize EasyOCR reader
-#     reader = easyocr.Reader(['en'], gpu=True)
-#
-#     # Perform OCR using EasyOCR
-#     result = reader.readtext(screenshot, detail=1)
-#     return result
-
-
 def hibernate():
     """
     Sends the computer in to hibernation.
     :return:
     """
-
-    print('Sending the computer into hibernate mode.')
+    log('Sending the computer into hibernate mode.')
+    time.sleep(1)
     os.system('shutdown /f /h')
 
 
@@ -227,15 +286,14 @@ def close_process(executable):
     try:
         print("Closing down the process")
         command = f'TASKKILL /F /IM {executable}'
-        # os.system(f'TASKKILL /F /IM {executable}')
         res = subprocess.run(command, shell=True)
         if res == 0:
             return True
         else:
             return False
     except Exception as exception:
-        print(exception)
-        print("Something went wrong when trying to close the game")
+        log("Something went wrong when trying to close the game")
+        log(exception.__str__(), True)
 
 def launch_game(game_launcher, game_url):
     """
@@ -244,15 +302,17 @@ def launch_game(game_launcher, game_url):
     """
     try:
         subprocess.run(f'start {game_url}', shell=True)
-    except Exception:
-        # I added this as a backup incase the gamestart call to steam would not work.
+    except Exception as error:
+        log(f'Primary method of launching game failed, trying secondary method. Writing error to log file')
+        log(f'{error.__str__()}', True)
         try:
+            # I added this as a backup incase the gamestart call to steam would not work.
             subprocess.run(game_launcher)
         except Exception as error:
-            print(error)
-            print('Something went wrong when trying to start the game')
-            print('Make sure that your set path to the game is set correctly in the "seedingconfig.ini" file')
-            print('Another possibility might be that the game is already running')
+            log(error)
+            log('Something went wrong when trying to start the game')
+            log('Make sure that your set path to the game is set correctly in the "seedingconfig.ini" file')
+            log('Another possibility might be that the game is already running')
 
 
 
@@ -278,7 +338,7 @@ def get_current_playercount_main(server_address: tuple[str, int], timeout: float
 
     except Exception as err:
         log('Some other exception occured. The error was:')
-        log(err)
+        log(err.__str__())
 
 
 def get_current_playercount_backup(server_address: tuple[str, int], timeout: float = 5.0):
@@ -286,10 +346,15 @@ def get_current_playercount_backup(server_address: tuple[str, int], timeout: flo
         info = a2s.info(server_address, timeout=timeout)
         if info:
             return info.player_count
+
     except a2s.BufferExhaustedError as err:
-        print('There was a buffer exhausted error when attempting to retrieve the player count.')
+        log(f'There was a buffer exhausted error when attempting to retrieve the player count.')
         return None
+
     except Exception as err:
+        log(f'Something went wrong when attempting to fetch the current player count:')
+        log(f'The exception type was: {err.__cause__}')
+        log(err.__str__(), True)
         # I don't want this to crash the entire program, so catching all errors here.
         return None
 
@@ -310,27 +375,42 @@ def get_current_playercount(server_address: tuple[str, int], timeout: float = 5.
             return player_count
 
 
-        #
-        # try:
-        #     players = a2s.info(server_address, timeout=timeout)
-        #     if players:
-        #         return players.player_count
-        #
-        # except a2s.BufferExhaustedError as err:
-        #     print('There was a buffer exhausted error when attempting to retrieve the player count.')
-        #     return None
-        #
-        # except TimeoutError as err:
-        #     time.sleep(1)
-        #     # print('Timed out when attempting to get the player count')
-        #     # return None
+def save_json_file(file_path: Path, data: dict):
+    """
+    Saves a json file to disk. Do note that this will overwrite already existing data in that file.
+    """
+
+    with open(file_path, 'w') as f:
+        dump(data, f, indent=4)
 
 
+def update_missing_fields_of_dict(original_dict: dict, template_dict: dict):
+    """
+    Updates a dictionary with missing fields from a given template dictionary.
+
+    """
+    for key, value in template_dict.items():
+        if key not in original_dict:
+            original_dict[key] = value
+
+    return original_dict
 
 
+def update_missing_fields_json(file: Path, template_dict: dict):
+    """
+    Updates a json file with missing fields from a given template dictionary.
+    """
+    with open(file, 'r') as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError:
+            # Return an empty dictionary if the file is empty or invalid JSON.
+            data = {}
 
+    data = update_missing_fields_of_dict(data, template_dict)
 
-
+    with open(file, 'w') as f:
+        json.dump(data, f, indent=4)
 
 
 
@@ -338,20 +418,11 @@ def test():
     ipaddress = '23.228.238.28'
     port = 27175
     address = (ipaddress, port)
-
-    # result = a2s.players(address)
-    # print(result)
     result = a2s.info(address)
     print(result)
-    # print(result.player_count)
-    # print(a2s.info(address))
-    # print(a2s.rules(address))
-
-
-    # print(a2s.players((ipaddress, port)))
-    # players = get_current_playercount((ipaddress, port))
-    # print(players)
 
 
 if __name__ == '__main__':
-    test()
+    # test()
+    # backup_all_game_settings(GAME_CONFIG_PATH)
+    pass

@@ -1,15 +1,21 @@
+import datetime
 import subprocess
 import sys
 import PySimpleGUI as sg
-import main
-import settings
-import utils
-from copy import deepcopy
-from settings import ConfigKeys, ScriptConfigFile, LOCAL_APPDATA, SCRIPT_CONFIG_SETTINGS_FILE, \
-    game_launcher_path, close_game_key, hibernate_pc_key, shutdown_pc_key, user_actions
-from utils import log
-from images import server_and_query_port_help
 
+import constants
+import main
+import utils
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import matplotlib.dates as mdates
+from assets.images.image_data import seeding_image, server_and_query_port_help
+from copy import deepcopy
+from settings import ConfigKeys, ScriptConfigFile
+from utils import log
+from constants import LOCAL_APPDATA, GAME_LAUNCHER_PATH, close_game_key, hibernate_pc_key, shutdown_pc_key, user_actions, \
+    SCRIPT_CONFIG_SETTINGS_FILE
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, FigureCanvasAgg
 
 DEFAULT_WINDOW_THEME = 'DarkGrey14'
 DEFAULT_GUI_FONT = ('helvetica', 12)
@@ -53,29 +59,55 @@ def user_action_window(config: ScriptConfigFile,
         }
 
     while True:
-        event, values = window.Read(timeout=100)
+        event, values = window.Read(timeout=200)
         if event in ('Exit', sg.WIN_CLOSED):
             break
 
-        if main.PROGRAM_SHUTDOWN:
+        if constants.PROGRAM_SHUTDOWN:
             break
 
-        if not main.SEEDING_PROCESS:
+        if not constants.SEEDING_PROCESS:
             if event in user_actions:
                 desired_useraction = user_actions[event]
-                main.launch_seeding_thread(config, desired_useraction)
+                main.launch_seeding_script_thread(config, desired_useraction)
                 break
 
     window.close()
+
+
+def high_player_threshold_warning_window():
+
+    layout = [
+        [sg.Text("""
+        Be aware that your player number may be too high. 
+        """)]
+    ]
+
+    window = sg.Window("Possible too high player number in settings")
+
+    while True:
+        event, values = window.Read()
+        if event in ('Exit', sg.WIN_CLOSED):
+            constants.PROGRAM_SHUTDOWN = True
+            break
+
+    window.close()
+
+def draw_figure(canvas, figure):
+    figure_canvas_agg = FigureCanvasTkAgg(figure, canvas)
+    figure_canvas_agg.draw()
+    figure_canvas_agg.get_tk_widget().pack(side='top', fill='both', expand=1)
+    return figure_canvas_agg
 
 
 def main_window(chosen_action: str | None,
                 window_theme: str = DEFAULT_WINDOW_THEME,
                 element_font: tuple[str, int] = DEFAULT_GUI_FONT):
     """
-    Creates an instance of the start_seedingscript_remote window. Everything else is launched from this in sub-windows.
+    Creates an instance of the main window. Everything else is launched from this in sub-windows.
     :return:
     """
+
     # global SeedingScriptMain
     sg.theme(window_theme)
 
@@ -89,16 +121,20 @@ def main_window(chosen_action: str | None,
     top_button_row_font = ('helvetica', 12)
 
     # Keys
-    open_settings_window_key = 'Open'
-    getting_started_key = 'Getting Started'
     stop_seeding_key = '-STOP_SEEDING-'
     start_seedingscript_key = '-LAUNCH-SCRIPT-'
     restore_settings_key = '-RESTORE_SETTINGS-'
-    restore_original_settings_key = 'ORIGINAL SETTINGS'
+    restore_original_settings_key = '-ORIGINAL_SETTINGS-'
+    backup_all_game_settings_key = '-BACKUP_ALL_GAME_SETTINGS-'
     multiline_panel_key = 'multiline'
+    open_settings_window_key = 'Open'
+    getting_started_key = 'Getting Started'
     settings_folder_key = 'Open Settings Folder'
     squad_settings_folder_key = 'Open Squads Settings Folder'
     get_info_key = 'Get Server Info'
+    canvas_key = 'CANVAS'
+    apply_lightweight_settings_key = "LIGHTWEIGHT_SETTINGS"
+    toggle_graph_visibility_key = 'TOGGLE_GRAPH_KEY'
 
     # Defines the elements and layout of the top menu of the window. This is a bit wack, but it's how it works.
     menu_def = [
@@ -107,9 +143,9 @@ def main_window(chosen_action: str | None,
         ['File', [f'&{settings_folder_key}', f'&{squad_settings_folder_key}']]
     ]
 
-    left_col = [sg.Column([
+    main_data = [sg.Column([
         [sg.Text('SeedingScript Output', font=element_font)],
-        [sg.MLine(size=(30, 40),
+        [sg.MLine(size=(30, 35),
                   key=multiline_panel_key,
                   text_color='WHITE',
                   disabled=True,
@@ -117,118 +153,190 @@ def main_window(chosen_action: str | None,
                   reroute_stdout=True,
                   reroute_stderr=True,
                   echo_stdout_stderr=True,
-                  write_only=True)]
-    ])]
-
-    graph = []
-
-
-    right_col = [sg.Column([
-        # TODO Fill in graph code here
-        #
-        #
-        #
-        #
-    ])]
+                  write_only=True),
+         sg.Canvas(key=canvas_key, visible=False)
+         ]])]
 
     top_row = [
         sg.Button('Start SeedingScript', key=start_seedingscript_key, font=top_button_row_font,
                   auto_size_button=True),
-        sg.Button('Restore Last Used Settings', key=restore_settings_key, font=top_button_row_font,
+        sg.B('Stop Seeding Process', key=stop_seeding_key, font=top_button_row_font,
+                  auto_size_button=True, enable_events=True),
+        sg.B('Restore Last Used Settings', key=restore_settings_key, font=top_button_row_font,
                   auto_size_button=True, tooltip='Restores the settings that was '
                                                  'stored before the last time seeding settings were applied'),
-        sg.Button('Restore Original Settings', key=restore_original_settings_key, font=top_button_row_font,
+        sg.B('Restore Original Settings', key=restore_original_settings_key, font=top_button_row_font,
                   auto_size_button=True, enable_events=True),
-        sg.Button('Stop Seeding Process', key=stop_seeding_key, font=top_button_row_font,
+        sg.B('Apply Lightweight Settings', key=apply_lightweight_settings_key, font=top_button_row_font,
                   auto_size_button=True, enable_events=True),
+    ]
+    top_second_row = [
         sg.Button('Get Server Info', key=get_info_key, font=top_button_row_font,
-                  auto_size_button=True, enable_events=True, tooltip='Requests information from the currently stored server, '
-                                                                     'like the name, map and player number')
+             auto_size_button=True, enable_events=True, tooltip='Requests information from the currently stored server, '
+                                                                     'like the name, map and player number'),
+        sg.B('Backup All Game Settings', key=backup_all_game_settings_key, font=top_button_row_font,
+             auto_size_button=True, enable_events=True, tooltip=
+             """Create a backup of the entire game's config folder."""),
+        sg.B('Toggle Graph', key=toggle_graph_visibility_key, font=top_button_row_font,
+             auto_size_button=True, enable_events=True, tooltip="""
+             Toggle the visibility of the graph displaying the player number of time. 
+             Will only display once there has been gathered minimum 2 points of data."""),
     ]
 
     layout = [
         [sg.Menu(menu_def, tearoff=False, size=(10, 10))],
         [top_row],
-        [left_col]
+        [top_second_row],
+        [sg.Frame("", layout=[main_data], vertical_alignment='t')]
     ]
 
-    window = sg.Window('SeedingScript', layout, font=element_font, resizable=False, finalize=True)
+    window = sg.Window('SeedingScript', layout, font=element_font, resizable=False, finalize=True, icon=seeding_image)
 
+    #  Matches the colour of the rest of the UI.
+    colour_hex = "#24292E"
 
-    # window.TKroot.minsize(1000, 1000)
-    # window.TKroot.maxsize(1500, 1000)
+    log(f'Initialising graph/canvas parameters', True)
+    fig = plt.figure()
+    fig.align_labels()
+    # set the color of the whole figure
+    fig.patch.set_facecolor(colour_hex)
+    ax = fig.add_subplot(111)
+    ax.set_facecolor(colour_hex)
+    figure_canvas_agg = draw_figure(window[canvas_key].TKCanvas, fig)
+    # sets the colour of the graph
+    # sets the background colour of everything else.
+    figure_canvas_agg.get_tk_widget().configure(background=colour_hex)
+    graph_hidden = False
+    graph_hidden_before_enough_data = True
 
     while True:
-        event, values = window.read(timeout=150)
+        event, values = window.read(timeout=1000)
 
         if event in ('Exit', sg.WIN_CLOSED):
-            main.PROGRAM_SHUTDOWN = True
+            constants.PROGRAM_SHUTDOWN = True
             break
 
         if chosen_action in user_actions.values():
-            if not main.SEEDING_PROCESS or not main.SEEDING_PROCESS.is_alive():
+            if not (constants.SEEDING_PROCESS and constants.SEEDING_PROCESS.is_alive()):
                 if not launched_script_given_action:
                     log(f'Launching seeding script from the stored or given user action')
                     log(f'The action to be performed is : {chosen_action}')
-                    main.launch_seeding_thread(config, chosen_action)
+                    main.launch_seeding_script_thread(config, chosen_action)
                     launched_script_given_action = True
 
-        if main.SEEDING_PROCESS is not None:
-            if not main.SEEDING_PROCESS.is_alive():
-                main.SEEDING_PROCESS = None
+        if constants.SEEDING_PROCESS is not None:
+            if not constants.SEEDING_PROCESS.is_alive():
+                constants.SEEDING_PROCESS = None
+
+        if event == toggle_graph_visibility_key:
+            log('Toggled graph visibility', True)
+            graph_hidden = not graph_hidden
+            window[canvas_key].update(visible=graph_hidden)
+
+        if len(constants.pt_time) >= 2 and constants.pt_player_numbers:  # If there's data to plot...
+            if graph_hidden_before_enough_data:
+                log(f'Retrieved enough data to display the graph', True)
+                window[canvas_key].update(visible=True)
+                graph_hidden_before_enough_data = False
+                graph_hidden = False
+
+            latest_pt_time = constants.pt_time[-constants.SAMPLE_MAX:]
+            latest_pt_player_numbers = constants.pt_player_numbers[-constants.SAMPLE_MAX:]
+
+            ax.cla()
+            ax.tick_params(colors='white')
+            ax.yaxis.set_major_locator(ticker.MultipleLocator(10))
+            date_format = mdates.DateFormatter('%H:%M')
+            # ax.xaxis.set_major_locator(ticker.MaxNLocator(5))
+            ax.xaxis.set_major_formatter(date_format)
+            ax.set_ylim(0, 120)
+            ax.set_xlabel('Time', color='white')
+            ax.set_ylabel('Players', color='white')
+            ax.set_title('Player count over time(included players in queue)', color='white')
+            ax.grid()
+            ax.plot(latest_pt_time, latest_pt_player_numbers, color='white')
+            figure_canvas_agg.draw()
+
+        elif not graph_hidden:  # If there's no data to plot and the graph is currently visible...
+            # Hide the graph:
+            window[canvas_key].update(visible=False)
+            graph_hidden = True
 
         if event == restore_settings_key:
+            log(f'Clicked "Restore Last Used Settings"', True)
             main.restore_last_used_settings(config, compare_settings=False)
 
-        if event == open_settings_window_key:
+        elif event == open_settings_window_key:
+            log(f'Clicked "Open Settings"', True)
             settings_window(config=config)
 
-        if event == start_seedingscript_key:
+        elif event == start_seedingscript_key:
             # Only opens the action prompt if the seeding process is not already running.
-            if not main.SEEDING_PROCESS or not main.SEEDING_PROCESS.is_alive():
+            log(f'Clicked "Start SeedingScript button"', True)
+            if not constants.SEEDING_PROCESS or not constants.SEEDING_PROCESS.is_alive():
+                log(f'Seeding Process was not running', True)
                 user_action_window(config=config)
+            else:
+                log(f'Seeding Process is already running')
 
-        if event == restore_original_settings_key:
+        elif event == restore_original_settings_key:
+            log(f'Clicked "Restore Original Settings Button".', True)
             main.restore_original_settings(config=config)
 
-        if event == get_info_key:
-            # player_count = utils.get_current_playercount(address)
-            info = utils.get_info(address)
-            if info is not None:
+        elif event == backup_all_game_settings_key:
+            log(f'Created backup of game settings.')
+            utils.backup_all_game_settings(config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH))
+
+        elif event == get_info_key:
+            server_info = utils.get_info(address)
+            if server_info is not None:
                 log(f'\n'
-                    f'Server Name: {info.server_name}\n'
+                    f'Server Name: {server_info.server_name}\n'
                     '\n'
-                    f'Layer: {info.map_name}\n'
+                    f'Layer: {server_info.map_name}\n'
                     '\n'
-                    f'Player Count: {info.player_count}\n'
+                    f'Player Count: {server_info.player_count}\n'
                     '\n'
-                    f'NOTE: The player count is unreliable at higher player numbers, and is often shown to be too high compared to what it really is.')
+                    f'NOTE: The player count includes players that are in queue.')
+
+                now = datetime.datetime.now()
+                constants.pt_time.append(now)
+                constants.pt_player_numbers.append(server_info.player_count)
+
             else:
                 log(f'Script was unable to fetch info from the server. Check your connection or that the stored IP and Query Port are correct.')
 
-        if event == squad_settings_folder_key:
+        elif event == squad_settings_folder_key:
+            log("Opened Squad's setting folder", True)
             subprocess.run(['explorer.exe', config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH)])
 
-        if event == settings_folder_key:
-            subprocess.run(['explorer.exe', settings.SCRIPT_CONFIG_SETTINGS_FOLDER])
+        elif event == settings_folder_key:
+            log("Opened SeedingScript settings folder.", True)
+            subprocess.run(['explorer.exe', constants.SCRIPT_CONFIG_SETTINGS_FOLDER])
 
-        if event == getting_started_key:
+        elif event == getting_started_key:
+            log('Opened Getting Started Window', True)
             getting_started_window()
+
+        elif event == apply_lightweight_settings_key:
+            log('Clicked "Apply Lightweight Settings" button', True)
+            main.apply_lightweight_settings(config)
+
 
         # Checks if the seeding_process variable is the initialized value,
         # if not, it means that a process has been initialized,
         # In which case the process will be killed, and reset to None.
         # This makes it easy to check avoid launching multiple instances of the same process.
         if event == stop_seeding_key:
-            if not main.SEEDING_PROCESS:
+            if not constants.SEEDING_PROCESS:
                 log('No active seeding thread.')
                 continue
 
-            if main.SEEDING_PROCESS.is_alive():
-                main.STOP_SEEDINGSCRIPT = True
+            if constants.SEEDING_PROCESS.is_alive():
+                constants.STOP_SEEDINGSCRIPT = True
 
                 log('Seeding process is currently running, sending signal to stop.\n'
-                    'This has not been fully tested yet. The thread may take some time to stop, depending on what it is doing. '
+                    'This process can take some amount of time, depending on the current state of the autojoin execution.'
                     'If it does not stop within about a minute at the most, close the main window.')
 
     # Frees up the resources used by the window once the while loop has been broken out of
@@ -257,7 +365,6 @@ def settings_window(config: ScriptConfigFile,
     none_key = 'none'
     action_group = 'ACTION1'
 
-
     radio_button_none = sg.Radio('None', key=none_key, default=True, group_id=action_group)
     radio_button_close = sg.Radio('Close', key=close_game_key, group_id=action_group)
     radio_button_shutdown = sg.Radio('Shutdown', key=shutdown_pc_key, group_id=action_group)
@@ -267,7 +374,7 @@ def settings_window(config: ScriptConfigFile,
         [sg.Frame('', layout=[
             [sg.Text("Server's IP/Domain", font=default_text_font),
 
-             sg.Text('Player Threshold', font=default_text_font, pad=(120, 0))],
+             sg.Text('Player Threshold', font=default_text_font, pad=(80, 0))],
 
             [sg.InputText(size=(18, 20), key=ConfigKeys.SERVER_IP, font=default_text_font,
                           default_text=config.get(ConfigKeys.SERVER_IP),
@@ -318,7 +425,8 @@ def settings_window(config: ScriptConfigFile,
                              key=ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME, enable_events=True, tooltip=
                              "Specifies whether the script will attempt to autojoin the desired server, regardless of the user already being in-game")],
 
-                [sg.Frame("Stored script action - Not Implemented Yet", layout=[[radio_button_none, radio_button_close, radio_button_shutdown]], font=default_text_font,)],
+                [sg.Frame("Stored script action - Not Implemented Yet",
+                          layout=[[radio_button_none, radio_button_close, radio_button_shutdown]], font=default_text_font, )],
                 # [sg.Checkbox('Attempt rejoin if disconnected',
                 #              default=config.get(ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER),
                 #              key=ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER, enable_events=True, tooltip=
@@ -328,7 +436,8 @@ def settings_window(config: ScriptConfigFile,
             ])],
 
             [sg.Frame('Threshold of players', font=default_text_font, layout=[
-                [sg.Text('Note: Random player threshold \noverrides these', font=default_text_font)],
+                [sg.Text('Note: Disabling random player threshold \n'
+                         'also overrides these', font=default_text_font)],
 
                 [sg.Slider(range=(1, 100), orientation='v', size=(5, 20),
                            default_value=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER),
@@ -342,7 +451,7 @@ def settings_window(config: ScriptConfigFile,
 
              # Right bottom frame on the left main_seeding_loop frame.
              sg.Frame("", layout=[
-                 [sg.Text('Number of attempts to autojoin', font=default_text_font,)],
+                 [sg.Text('Number of attempts to autojoin', font=default_text_font, )],
 
                  [sg.InputText(key=ConfigKeys.ATTEMPTS_TO_AUTOJOIN_SERVER, size=(5, 5),
                                font=default_text_font,
@@ -350,7 +459,7 @@ def settings_window(config: ScriptConfigFile,
                                enable_events=True,
                                tooltip='How many attempts the script will attempt to autojoin the server before giving up')],
 
-                 [sg.Text('Game server query interval', font=default_text_font,)],
+                 [sg.Text('Game server query interval', font=default_text_font, )],
                  [sg.InputText(key=ConfigKeys.SLEEP_INTERVAL_SECONDS, size=(5, 5),
                                font=default_text_font,
                                default_text=config.get(ConfigKeys.SLEEP_INTERVAL_SECONDS),
@@ -359,7 +468,7 @@ def settings_window(config: ScriptConfigFile,
                                "How often the program will try and query the server for player numbers, defined in seconds. "
                                "Default is 60 seconds, but generally shouldn't need to be touched"), sg.Text('Seconds')],
 
-                 [sg.Text('Auto-join Delay', font=default_text_font,)],
+                 [sg.Text('Auto-join Delay', font=default_text_font, )],
                  [sg.InputText(key=ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS, size=(5, 5),
                                font=default_text_font,
                                default_text=config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS), enable_events=True,
@@ -379,7 +488,7 @@ def settings_window(config: ScriptConfigFile,
             [sg.Text("Squad's launcher path", font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SQUAD_INSTALL_PATH, font=default_text_font,
                           default_text=config.get(ConfigKeys.SQUAD_INSTALL_PATH), enable_events=True),
-             sg.FileBrowse(initial_folder=game_launcher_path)],
+             sg.FileBrowse(initial_folder=GAME_LAUNCHER_PATH)],
 
             [sg.Text("Squad's steam URL handle", font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SQUAD_STEAM_URL_HANDLE, font=default_text_font,
@@ -413,15 +522,16 @@ def settings_window(config: ScriptConfigFile,
     layout = \
         [[sg.Text('Settings', font=('helvetica', 26))],
          [left_col, right_col],
-         [sg.Button('Save', key=save_key), sg.Button('Reset to defaults', key=default_key), sg.Button('Open Script Settings Folder', key=settings_key)]]
-
+         [sg.Button('Save', key=save_key), sg.Button('Reset to defaults', key=default_key),
+          sg.Button('Open Script Settings Folder', key=settings_key)]]
 
     # I've decided to this to enforce the numerical fields actually being numbers
     numerical_events = [ConfigKeys.PLAYER_THRESHOLD, ConfigKeys.SERVER_QUERY_PORT,
                         ConfigKeys.SLEEP_INTERVAL_SECONDS, ConfigKeys.ATTEMPTS_TO_AUTOJOIN_SERVER,
                         ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS]
 
-    window = sg.Window('Settings', layout, font=default_text_font, resizable=False, finalize=True, element_justification='c')
+    window = sg.Window('Settings', layout, font=default_text_font, resizable=False, finalize=True, element_justification='l',
+                       icon=seeding_image)
     # Event loop
     while True:
         event, values = window.Read(timeout=75)
@@ -434,7 +544,7 @@ def settings_window(config: ScriptConfigFile,
 
             break
 
-        elif main.PROGRAM_SHUTDOWN:
+        elif constants.PROGRAM_SHUTDOWN:
             break
 
         if event in numerical_events:
@@ -445,7 +555,6 @@ def settings_window(config: ScriptConfigFile,
                 config.set(event, values[event])
             except ValueError:
                 window.Element(event).Update(0)
-
 
             # if values[event] == "":
             #     window.Element(event).Update(0)
@@ -484,7 +593,7 @@ def settings_window(config: ScriptConfigFile,
             # TODO add a way that all the GUI fields get updated when a reset happens.
 
         if event == settings_key:
-            subprocess.run(['explorer.exe', config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH)])
+            subprocess.run(['explorer.exe', constants.SCRIPT_CONFIG_SETTINGS_FOLDER])
             # for key in ConfigKeys:
             #     try:
             #         window.Element(key).Update(config.get(key))
@@ -534,11 +643,11 @@ def getting_started_window(text_size=('helvetica', 12)):
     However, I understand that there might be some reservations about this approach, which is why I have made the code open source.
 
     Another quirk with this process is that it uses a substantial amount of CPU resources throughout the duration of the autojoin process,
-    due to the high computational requirements of OCR. Lastly, the script will also attempt to bring the window to the foreground to ensure that the necessary buttons are visible.
+    due to the high computational requirements of OCR.
+    Lastly, the script will also attempt to bring the window to the foreground to ensure that the necessary buttons are visible.
 
     If you feel uncomfortable with any of these quirks, you have the option to disable the auto-join feature in the settings.
     """
-
 
     layout_autojoin_howto = [
         [sg.Text(help_text, font=text_size)],
@@ -558,12 +667,11 @@ def getting_started_window(text_size=('helvetica', 12)):
         [sg.Tab("How to find query port", layout_finding_query_port)],
     ]
 
-
     layout = [
         [sg.TabGroup(layout_tag_group)],
         [sg.Button(f'OK', font=text_size)]
     ]
-    window = sg.Window('Getting Started', layout)
+    window = sg.Window('Getting Started', layout, icon=seeding_image)
 
     while True:
         event, values = window.read(timeout=150)
@@ -572,6 +680,7 @@ def getting_started_window(text_size=('helvetica', 12)):
             break
 
     window.close()
+
 
 def known_issues_window(text_size=('helvetica', 12)):
     sg.theme(DEFAULT_WINDOW_THEME)
@@ -582,19 +691,20 @@ def known_issues_window(text_size=('helvetica', 12)):
     layout = [
         [sg.Text(text, font=text_size)]
     ]
-    window = sg.Window('Known Issues', layout)
+    window = sg.Window('Known Issues', layout, icon=seeding_image)
 
     while True:
         event, values = window.read(timeout=150)
 
         if event in ('Exit', sg.WIN_CLOSED):
-            main.PROGRAM_SHUTDOWN = True
             break
+
     window.close()
 
 
 def save_prompt(window_theme: str = DEFAULT_WINDOW_THEME,
                 element_font: tuple[str, int] = DEFAULT_GUI_FONT):
+
     sg.theme(window_theme)
 
     save_key = '-YES-'
@@ -605,19 +715,14 @@ def save_prompt(window_theme: str = DEFAULT_WINDOW_THEME,
         [sg.Text('There are unsaved changes. Do you want to save them before exiting?')],
         [sg.Button('Save and Exit', key=save_key), sg.Button('Exit without saving', key=exit_key)]]
 
-    window = sg.Window('Do you wish to save unsaved changes?', layout, element_justification='c')
+    window = sg.Window('Do you wish to save unsaved changes?', layout, element_justification='c', icon=seeding_image)
 
     while True:
-        event, values = window.read(timeout=150)
+        event, values = window.read(timeout=500)
 
         if event in ('Exit', sg.WIN_CLOSED, exit_key):
-            # main.PROGRAM_SHUTDOWN = True
             result = False
             break
-
-        # elif event == exit_key:
-        #     result = False
-        #     break
 
         elif event == save_key:
             result = True
@@ -625,6 +730,7 @@ def save_prompt(window_theme: str = DEFAULT_WINDOW_THEME,
 
     window.close()
     return result
+
 
 def main_test():
     main_window(DEFAULT_WINDOW_THEME)
@@ -634,5 +740,5 @@ if __name__ == '__main__':
     # settings_window(config=ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE))
     # getting_started_window()
     main_test()
+    # graph_test()
     # getting_started_window()
-

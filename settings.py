@@ -1,85 +1,35 @@
-import logging
-import multiprocessing
 import shutil
 import pyautogui
 from configparser import ConfigParser
 from json import load, dump
-from os import path, environ
+from os import path
 from collections import OrderedDict
 from enum import StrEnum, auto
 from pathlib import Path
 from utils import log
+from constants import __VERSION__, SCRIPT_CONFIG_SETTINGS_FOLDER, GAME_LAUNCHER_PATH, GAME_CONFIG_PATH, LOGGING_LEVEL, LOGGER
 
 # used to store the "keys" in the JSON config file.
 VALUE_KEY = 'value'
 DESCRIPTION_KEY = 'description'
 
 # Path globals
-__VERSION__ = "3.0.0b1"
 # TESTING_MODE = True
-TESTING_MODE = False
-LOCAL_APPDATA = Path(environ.get('LOCALAPPDATA'))
-SCRIPT_CONFIG_SETTINGS_FOLDER = Path(LOCAL_APPDATA) / 'SeedingScript'
 
 
-if TESTING_MODE:
-    SCRIPT_CONFIG_SETTINGS_FILE = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / 'seedingconfig_testing.json'
-else:
-    SCRIPT_CONFIG_SETTINGS_FILE = Path(SCRIPT_CONFIG_SETTINGS_FOLDER) / 'seedingconfig.json'
 
-GAME_CONFIG_PATH = Path(LOCAL_APPDATA) / 'SquadGame/Saved/Config/WindowsNoEditor'
 
-programfiles_32 = Path(environ.get("ProgramFiles(x86)"))
-programfiles_64 = Path(environ.get('ProgramW6432'))
 # game_config_path = os.path.abspath(f"{LOCAL_APPDATA}/SquadGame/Saved/Config/WindowsNoEditor")
-game_config_path = LOCAL_APPDATA / "SquadGame/Saved/Config/WindowsNoEditor"
-
-game_launcher_path_32 = programfiles_32 / 'Steam/steamapps/common/Squad/squad_launcher.exe'
-game_launcher_path_64 = programfiles_64 / 'Steam/steamapps/common/Squad/squad_launcher.exe'
-game_launcher_path = game_launcher_path_32 if game_launcher_path_32.exists() else game_launcher_path_64
-
-ORIGINAL_PATH = Path(game_config_path)
-BACKUP_FOLDER_PATH = Path(f'{ORIGINAL_PATH}\\Backup')
-LAST_USED_SETTINGS_IN_SCRIPT_FOLDER_PATH = Path(f'{SCRIPT_CONFIG_SETTINGS_FOLDER}\\GameUserSettingsLastUsed.ini')
-LAST_USED_BACKUP_PATH = Path(f'{BACKUP_FOLDER_PATH}\\GameUserSettingsLastUsed.ini')
-ACTIVE_CONFIG_FILE_PATH = Path(f'{ORIGINAL_PATH}\\GameUserSettings.ini')
-LIGHTWEIGHT_SWAP_FILE_PATH = Path(f'{BACKUP_FOLDER_PATH}\\GameUserSettingsSwapFile.ini')
 
 
-
-LOGGING_LEVEL = logging.DEBUG
 # LOGGING_LEVEL = logging.INFO
 # logging.basicConfig(level=LOGGING_LEVEL)
-LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(level=LOGGING_LEVEL)
 
-close_game_key = '-CLOSE_GAME-'
-hibernate_pc_key = '-HIBERNATE-'
-shutdown_pc_key = '-SHUTDOWN-'
-
-user_actions = {
-    close_game_key: 'close',
-    hibernate_pc_key: 'hibernate',
-    shutdown_pc_key: 'shutdown'
-}
-
-
-GUI_WINDOW_THEME = 'DarkGrey14'
-GUI_FONT = ('helvetica', 15)
-
-SAMPLES = 100
-SAMPLE_MAX = 100
-CANVAS_SIZE = (400, 800)
-LABEL_SIZE = (400, 20)
-
-SEEDING_PROCESS = None
-PLAYER_COUNT_ON_SERVER = None
 pyautogui.FAILSAFE = False
-PROGRAM_SHUTDOWN = False
-CURRENT_STATE = None
-EXIT_SEEDING_LOOP = False
 
-QUEUE = multiprocessing.Queue()
+
+# QUEUE = multiprocessing.Queue()
 
 class ConfigKeys(StrEnum):
     PLAYER_NAME = auto()
@@ -106,6 +56,9 @@ class ConfigKeys(StrEnum):
     LIGHTWEIGHT_SETTINGS_CURRENTLY_APPLIED = auto()
     PREVIOUSLY_LAUNCHED_SEEDINGSCRIPT = auto()
     DONT_START_GAME_IF_SERVER_ABOVE_THRESHOLD = auto()
+    SCRIPT_AUTO_START_THRESHOLD = auto()
+    SCRIPT_AUTO_START_UPPER_TIME = auto()
+    SCRIPT_AUTO_START_LOWER_TIME = auto()
 
 
 class ScriptConfigFile:
@@ -145,6 +98,10 @@ class ScriptConfigFile:
             self._config[key.value] = {VALUE_KEY: value}
 
     def get_server_address(self) -> tuple[str, int]:
+        """
+        Retrieves the IP/Domain and the query port
+        @return:
+        """
         return self.get(ConfigKeys.SERVER_IP), int(self.get(ConfigKeys.SERVER_QUERY_PORT))
 
     def save_settings(self):
@@ -160,7 +117,7 @@ class ScriptConfigFile:
         return config_file_json
 
     def reset_to_defaults(self):
-        self._config = initial_config()
+        self._config = template_config()
         self.save_settings()
 
 
@@ -170,17 +127,9 @@ class UserActions(StrEnum):
     HIBERNATE = auto()
 
 
-def generate_initial_config(file_path: Path):
+def template_config():
     """
-    Careful, this will *not* check if the file already exists, and will overwrite.
-    """
-    with open(file_path, 'w') as f:
-        dump(initial_config(), f, indent=4)
-
-
-def initial_config():
-    """
-    Function responsible for initiating the JSON file
+    Function responsible for storing the initial and default values of the script' config file
     :return:
     """
     seedingscript_config: dict = {
@@ -215,7 +164,7 @@ def initial_config():
         ConfigKeys.SLEEP_INTERVAL_SECONDS:
         {
             VALUE_KEY: 60,
-            DESCRIPTION_KEY: 'How often the script'
+            DESCRIPTION_KEY: 'The interval of how often the script will query the server for player numbers.'
         },
         ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED:
         {
@@ -235,7 +184,6 @@ def initial_config():
         ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED: {
             VALUE_KEY: False,
             DESCRIPTION_KEY: 'Whether lightweight seeding settings should be enabled.'
-
         },
         ConfigKeys.JOIN_SERVER_AUTOMATICALLY_ENABLED: {
             VALUE_KEY: True,
@@ -266,11 +214,11 @@ def initial_config():
             DESCRIPTION_KEY: 'The name of the games executable'
         },
         ConfigKeys.SQUAD_INSTALL_PATH: {
-            VALUE_KEY: f'{game_launcher_path}',
+            VALUE_KEY: f'{GAME_LAUNCHER_PATH}',
             DESCRIPTION_KEY: 'The path to the games launcher. No longer really necessary, but used as a backup'
         },
         ConfigKeys.SQUAD_CONFIG_FILES_PATH: {
-            VALUE_KEY: f'{game_config_path}',
+            VALUE_KEY: f'{GAME_CONFIG_PATH}',
             DESCRIPTION_KEY: "The path to squad's config files."
         },
         ConfigKeys.SQUAD_STEAM_URL_HANDLE: {
@@ -293,8 +241,6 @@ def initial_config():
             VALUE_KEY: True,
             DESCRIPTION_KEY: "Setting to specify if the script should still launch the game if the server is already above the player threshold."
         }
-
-
     }
 
     return seedingscript_config
@@ -388,11 +334,11 @@ def testing_config():
             DESCRIPTION_KEY: 'The name of the games executable'
         },
         ConfigKeys.SQUAD_INSTALL_PATH: {
-            VALUE_KEY: f'{game_launcher_path}',
+            VALUE_KEY: f'{GAME_LAUNCHER_PATH}',
             DESCRIPTION_KEY: 'The path to the games launcher. No longer really necessary, but used as a backup'
         },
         ConfigKeys.SQUAD_CONFIG_FILES_PATH: {
-            VALUE_KEY: f'{game_config_path}',
+            VALUE_KEY: f'{GAME_CONFIG_PATH}',
             DESCRIPTION_KEY: "The path to squad's config files."
         },
         ConfigKeys.SQUAD_STEAM_URL_HANDLE: {
@@ -412,7 +358,6 @@ def testing_config():
     return seedingscript_config
 
 
-
 def init_games_seeding_config():
     """
     Initializes the in game config file for setting applying seeding settings, if applicable.
@@ -420,7 +365,7 @@ def init_games_seeding_config():
     :param:
     :return:
     """
-    game_original_config_path = Path(game_config_path)
+    game_original_config_path = GAME_CONFIG_PATH
     backup_path = game_original_config_path / 'Backup'
     original_config_file = game_original_config_path / 'GameUserSettings.ini'
     last_used_file = backup_path / 'GameUserSettingsLastUsed.ini'
@@ -447,8 +392,10 @@ def init_games_seeding_config():
 
     if not path.exists(last_used_file):
         shutil.copyfile(original_config_file, last_used_file)
+
     if not path.exists(backup_of_original_config_file):
         shutil.copyfile(original_config_file, backup_of_original_config_file)
+
     if not path.exists(backup_config_file_secondary):
         shutil.copyfile(original_config_file, backup_config_file_secondary)
 
@@ -486,6 +433,71 @@ def initialise_swap_file(swap_file_path: Path):
     with open(swap_file_path, "w") as writefile:
         parser.write(writefile)
     return
+
+
+def compare_lightweight_to_active_config_file(active_config_file: Path, lightweight_config_file: Path) -> bool:
+    lightweight_settings_active = False
+    parser_active = ConfigParser(dict_type=MultiOrderedDict, strict=False)
+    parser_active.optionxform = str
+    parser_active.read(active_config_file)
+
+    parser_lightweight = ConfigParser(dict_type=MultiOrderedDict, strict=False)
+    parser_lightweight.optionxform = str
+    parser_lightweight.read(lightweight_config_file)
+
+    # Checks how many of the settings are the same, if it's above the threshold,
+    similarity_counter = 0
+    similarity_threshold = 5
+
+    settings_section = '/Script/Squad.SQGameUserSettings'
+    resolution_x = 'ResolutionSizeX'
+    resolution_y = 'ResolutionSizeY'
+    last_confirmed_resolution_x = 'LastUserConfirmedResolutionSizeX'
+    last_confirmed_resolution_y = 'LastUserConfirmedResolutionSizeY'
+    last_confirmed_desired_y = 'LastUserConfirmedDesiredScreenWidth'
+    last_confirmed_desired_x = 'LastUserConfirmedDesiredScreenHeight'
+    fullscreen_mode = 'FullscreenMode'
+    last_confirmed_fullscreen_mode = 'LastConfirmedFullscreenMode'
+    menu_frame_limit = 'MenuFrameRateLimit'
+    master_volume = 'MasterVolume'
+    resolution_scaling = 'ScreenPercentage'
+    postfx_brightness = 'PostFX_Brightness'
+    max_ping = 'FilterMaxPing'
+
+    distinct_settings = [menu_frame_limit, menu_frame_limit, master_volume, resolution_scaling, postfx_brightness, max_ping]
+
+    mainsection_active = parser_active[settings_section]
+    mainsection_light = parser_lightweight[settings_section]
+
+    if (mainsection_active[resolution_x] == mainsection_light[resolution_x] and
+        mainsection_active[resolution_y] == mainsection_light[resolution_y]):
+
+        similarity_counter += 1
+
+    if (mainsection_active[last_confirmed_resolution_x] == mainsection_light[last_confirmed_resolution_x] and
+        mainsection_active[last_confirmed_resolution_y] == mainsection_light[last_confirmed_resolution_y]):
+
+        similarity_counter += 1
+
+    if (mainsection_active[last_confirmed_desired_x] == mainsection_light[last_confirmed_desired_x] and
+        mainsection_active[last_confirmed_desired_y] == mainsection_light[last_confirmed_desired_y]):
+
+        similarity_counter += 1
+
+    # if (mainsection_active[fullscreen_mode] == mainsection_light[fullscreen_mode] and
+    #     mainsection_active[last_confirmed_fullscreen_mode] == mainsection_light[last_confirmed_fullscreen_mode]):
+    #
+    #     similarity_counter += 1
+
+    for setting in distinct_settings:
+        if mainsection_active[setting] == mainsection_light[setting]:
+            similarity_counter += 1
+
+    if similarity_counter >= similarity_threshold:
+        lightweight_settings_active = True
+
+    return lightweight_settings_active
+
 
 
 class MultiOrderedDict(OrderedDict):
