@@ -2,7 +2,6 @@ import datetime
 import subprocess
 import sys
 import PySimpleGUI as sg
-
 import constants
 import main
 import utils
@@ -13,9 +12,9 @@ from assets.images.image_data import seeding_image, server_and_query_port_help
 from copy import deepcopy
 from settings import ConfigKeys, ScriptConfigFile
 from utils import log
-from constants import LOCAL_APPDATA, GAME_LAUNCHER_PATH, close_game_key, hibernate_pc_key, shutdown_pc_key, user_actions, \
+from constants import LOCAL_APPDATA, GAME_LAUNCHER_PATH, none_key, close_game_key, hibernate_pc_key, shutdown_pc_key, user_actions, \
     SCRIPT_CONFIG_SETTINGS_FILE
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, FigureCanvasAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 DEFAULT_WINDOW_THEME = 'DarkGrey14'
 DEFAULT_GUI_FONT = ('helvetica', 12)
@@ -92,6 +91,7 @@ def high_player_threshold_warning_window():
             break
 
     window.close()
+
 
 def draw_figure(canvas, figure):
     figure_canvas_agg = FigureCanvasTkAgg(figure, canvas)
@@ -176,7 +176,7 @@ def main_window(chosen_action: str | None,
                                                                      'like the name, map and player number'),
         sg.B('Backup All Game Settings', key=backup_all_game_settings_key, font=top_button_row_font,
              auto_size_button=True, enable_events=True, tooltip=
-             """Create a backup of the entire game's config folder."""),
+             """Create a backup/snapshot of the entire game's config folder."""),
         sg.B('Toggle Graph', key=toggle_graph_visibility_key, font=top_button_row_font,
              auto_size_button=True, enable_events=True, tooltip="""
              Toggle the visibility of the graph displaying the player number of time. 
@@ -356,18 +356,20 @@ def settings_window(config: ScriptConfigFile,
     sg.theme(window_theme)
     sg.SystemTray(tooltip='SeedingScript')
 
-    # Reloads the parameters from the config file.
+    # We do this so we can compare the initial settings to potential changes.
     config_initial = deepcopy(config)
+
+    stored_action = config.get(ConfigKeys.DEFAULT_USER_ACTION)
 
     save_key = 'SAVE'
     default_key = 'default'
     settings_key = 'settings'
-    none_key = 'none'
     action_group = 'ACTION1'
 
-    radio_button_none = sg.Radio('None', key=none_key, default=True, group_id=action_group)
-    radio_button_close = sg.Radio('Close', key=close_game_key, group_id=action_group)
-    radio_button_shutdown = sg.Radio('Shutdown', key=shutdown_pc_key, group_id=action_group)
+    radio_button_none = sg.Radio('None', key=none_key, group_id=action_group, enable_events=True)
+    radio_button_close = sg.Radio('Close', key=close_game_key, group_id=action_group, enable_events=True)
+    radio_button_hibernate = sg.Radio('Hibernate', key=hibernate_pc_key, group_id=action_group, enable_events=True)
+    radio_button_shutdown = sg.Radio('Shutdown', key=shutdown_pc_key, group_id=action_group, enable_events=True)
 
     # Defining the left side of GUI, contains boolean settings and some other fields.
     left_col = sg.Column([
@@ -378,12 +380,16 @@ def settings_window(config: ScriptConfigFile,
 
             [sg.InputText(size=(18, 20), key=ConfigKeys.SERVER_IP, font=default_text_font,
                           default_text=config.get(ConfigKeys.SERVER_IP),
-                          enable_events=True),
+                          enable_events=True, tooltip=
+                          "The IP/Domain of the server that you wish to autojoin/perform the seeding loop.\n"
+                          "This is used to query the server for player numbers and if the user is in the server."
+                          ),
 
              sg.InputText(size=(5, 10), key=ConfigKeys.PLAYER_THRESHOLD, font=default_text_font,
                           default_text=config.get(ConfigKeys.PLAYER_THRESHOLD),
-                          enable_events=True,
-                          pad=(55, 0))],
+                          enable_events=True, pad=(55, 0), tooltip=
+                          "The upper limit of connected players before the script will exit the seeding thread.\n"
+                          "Note, this is overriden by the random threshold, if enabled.")],
 
             [sg.Text("Server's Query Port", font=default_text_font)],
 
@@ -402,37 +408,45 @@ def settings_window(config: ScriptConfigFile,
                              default=config.get(ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED),
                              key=ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED, enable_events=True, tooltip=
                              'This specifies whether the script will apply reduced graphical settings to the game before starting it.\n'
-                             'Some examples of the settings affected are; resolution, framerate limiter, resolution scaling.')],
+                             'Some examples of the settings affected are; resolution, framerate limiter, resolution scaling.\n'
+                             'This will significantly reduce the usage amount of resources used by the game.\n'
+                             'Will restore your previous settings automatically after the seeding thread hits the given player threshold\n'
+                             'Alternatively if the game closes or the settings are not restored automatically for whatever reason\n'
+                             'This can be done using on of the buttons in the main window.')],
 
                 [sg.Checkbox('Close Seeding Process if Game Closes/Crashes',
                              font=default_text_font,
                              default=config.get(ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED),
                              key=ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED, enable_events=True, tooltip=
-                             'Whether the script will close itself should the game be closed, after the script main_seeding_loop logic loop has started\n'
+                             'Whether the seeding thread will close itself should the game be closed,\n'
+                             'if the game was launched by the script, and the game has crashed.\n'
                              "Does not affect regular shutdown if that's the chosen action. ")],
 
                 [sg.Checkbox('Use Random Player Threshold',
                              font=default_text_font,
                              default=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED),
                              key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED, enable_events=True, tooltip=
-                             'To increase the spread of when players disconnect. '
-                             'Chooses a random integer between the chosen lower and upper bounds.'
-                             'By default on. Note that this overrides the manually set player threshold, but this is left as an option should the user'
-                             'wish to use their own threshold')],
+                             'To increase the spread of when players disconnect. \n'
+                             'Chooses a random integer between the stored lower and upper bounds.\n'
+                             'By default on. Note that this overrides the manually set player threshold, \n'
+                             'But this is left as an option should the user wish to use their own threshold')],
 
                 [sg.Checkbox('Attempt autojoin if already in the game',
                              default=config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME),
                              key=ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME, enable_events=True, tooltip=
-                             "Specifies whether the script will attempt to autojoin the desired server, regardless of the user already being in-game")],
+                             "Specifies whether the script will attempt to autojoin the desired server, \n"
+                             "regardless of the user already being in-game")],
 
-                [sg.Frame("Stored script action - Not Implemented Yet",
-                          layout=[[radio_button_none, radio_button_close, radio_button_shutdown]], font=default_text_font, )],
-                # [sg.Checkbox('Attempt rejoin if disconnected',
-                #              default=config.get(ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER),
-                #              key=ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER, enable_events=True, tooltip=
-                #              'Whether the script will attempt to reconnect when the player name is not found in the server. By default off.'
-                #              'Do note that an accurate player name should be specified if this setting is enabled, otherwise the'
-                #              'script will attempt to constantly rejoin without being able to.')]
+                [sg.Checkbox('Attempt To Rejoin If Disconnected',
+                             default=config.get(ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER),
+                             key=ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER, enable_events=True, tooltip=
+                             'Whether the script will attempt to reconnect when the player name is not found in the server. By default off.\n'
+                             'Do note that an accurate player name should be specified if this setting is enabled,\n'
+                             'Otherwise the script will attempt to constantly reconnect beacuse it is not detecting the player in the game')],
+
+                [sg.Frame("Stored script action - Not fully tested yet",
+                          layout=[[radio_button_none, radio_button_close, radio_button_hibernate, radio_button_shutdown]], font=default_text_font, )],
+
             ])],
 
             [sg.Frame('Threshold of players', font=default_text_font, layout=[
@@ -441,11 +455,14 @@ def settings_window(config: ScriptConfigFile,
 
                 [sg.Slider(range=(1, 100), orientation='v', size=(5, 20),
                            default_value=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER),
-                           key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER, enable_events=True),
+                           key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER, enable_events=True,
+                           tooltip=
+                           "Lower bound of which a random number will be picked for the player threshold"),
 
                  sg.Slider(range=(1, 100), orientation='v', size=(5, 20),
                            default_value=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER),
-                           key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER, enable_events=True)]],
+                           key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER, enable_events=True,
+                           tooltip="Upper bound of which a random number will be picked for the player threshold")]],
 
                       element_justification='center'),
 
@@ -457,18 +474,18 @@ def settings_window(config: ScriptConfigFile,
                                font=default_text_font,
                                default_text=config.get(ConfigKeys.ATTEMPTS_TO_AUTOJOIN_SERVER),
                                enable_events=True,
-                               tooltip='How many attempts the script will attempt to autojoin the server before giving up')],
+                               tooltip='How many attempts the script will attempt to autojoin the server before the script will give up')],
 
-                 [sg.Text('Game server query interval', font=default_text_font, )],
+                 [sg.Text('Game Server Query Interval', font=default_text_font, )],
                  [sg.InputText(key=ConfigKeys.SLEEP_INTERVAL_SECONDS, size=(5, 5),
                                font=default_text_font,
                                default_text=config.get(ConfigKeys.SLEEP_INTERVAL_SECONDS),
                                enable_events=True,
                                tooltip=
-                               "How often the program will try and query the server for player numbers, defined in seconds. "
+                               "How often the program will try and query the server for player numbers, defined in seconds. \n"
                                "Default is 60 seconds, but generally shouldn't need to be touched"), sg.Text('Seconds')],
 
-                 [sg.Text('Auto-join Delay', font=default_text_font, )],
+                 [sg.Text('Auto-Join Delay', font=default_text_font, )],
                  [sg.InputText(key=ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS, size=(5, 5),
                                font=default_text_font,
                                default_text=config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS), enable_events=True,
@@ -532,6 +549,16 @@ def settings_window(config: ScriptConfigFile,
 
     window = sg.Window('Settings', layout, font=default_text_font, resizable=False, finalize=True, element_justification='l',
                        icon=seeding_image)
+
+    if stored_action is None:
+        window[none_key].update(value=True)
+    elif stored_action == close_game_key:
+        window[close_game_key].update(value=True)
+    elif stored_action == hibernate_pc_key:
+        window[hibernate_pc_key].update(value=True)
+    elif stored_action == shutdown_pc_key:
+        window[shutdown_pc_key].update(value=True)
+
     # Event loop
     while True:
         event, values = window.Read(timeout=75)
@@ -556,6 +583,18 @@ def settings_window(config: ScriptConfigFile,
             except ValueError:
                 window.Element(event).Update(0)
 
+        if event in user_actions:
+            config.set(ConfigKeys.DEFAULT_USER_ACTION, event)
+
+        elif event == none_key:
+            config.set(ConfigKeys.DEFAULT_USER_ACTION, None)
+
+        for key in ConfigKeys:
+            try:
+                if event == key and values[key] != config.get(key):
+                    config.set(key, values[key])
+            except Exception as err:
+                continue
             # if values[event] == "":
             #     window.Element(event).Update(0)
             # else:
@@ -575,12 +614,6 @@ def settings_window(config: ScriptConfigFile,
         #     window.Element(event).Update(lower_value + 1)
         #     window.refresh()
 
-        for key in ConfigKeys:
-            try:
-                if event == key and values[key] != config.get(key):
-                    config.set(key, values[key])
-            except Exception as err:
-                continue
 
         if event == save_key:
             if config != config_initial:

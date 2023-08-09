@@ -22,7 +22,7 @@ from json import dump
 from constants import SCRIPT_CONFIG_SETTINGS_FOLDER, LOG_FOLDER, LOGFILE
 
 
-def log(string: str, write_to_file_only=False):
+def log(string: str, write_to_file_only=False, write_to_stdout_only=False):
     """
     Basic logging function. I was originally using the python inbuilt logging module, however this was not playing nice with the GUI.
     So I ended up having to make my own custom logging functionality.
@@ -30,11 +30,15 @@ def log(string: str, write_to_file_only=False):
     print_message = f'{get_formatted_local_time()} - {string}\n'
     logfile_message = f'[{get_formatted_utc_time()}]_[LOG]: {string}\n'
 
-    if not write_to_file_only:
+    if write_to_stdout_only:
         print(print_message)
-
-    with open(LOGFILE, 'a') as f:
-        f.write(logfile_message)
+    elif write_to_file_only:
+        with open(LOGFILE, 'a') as f:
+            f.write(logfile_message)
+    else:
+        print(print_message)
+        with open(LOGFILE, 'a') as f:
+            f.write(logfile_message)
 
 
 def init_logfile():

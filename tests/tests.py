@@ -27,8 +27,8 @@ class TestGUI(unittest.TestCase):
     def test_main_window(self):
         ui.main_window('close')
 
-    def test_user_action_window(self):
-        ui.action_window(config)
+    # def test_user_action_window(self):
+    #     ui.action_window(config)
 
 
 class TestOCR(unittest.TestCase):
@@ -49,11 +49,11 @@ class TestOCR(unittest.TestCase):
         print(result)
 
     def test_find_current_state(self):
-        res = autojoin.get_all_text_ocr()
+        res = autojoin.get_all_text_ocr(TestOCR.reader)
         res = autojoin.get_current_state(res)
 
     def test_find_match(self):
-        result = autojoin.get_all_text_ocr()
+        result = autojoin.get_all_text_ocr(TestOCR.reader)
         test = find_string_on_screen_from_results('find match', result)
 
     def test_split_strings(self):

@@ -40,7 +40,10 @@ LOGGER = logging.getLogger(__name__)
 close_game_key = '-CLOSE_GAME-'
 hibernate_pc_key = '-HIBERNATE-'
 shutdown_pc_key = '-SHUTDOWN-'
+none_key = 'none'
+
 user_actions = {
+    # none_key: None,
     close_game_key: 'close',
     hibernate_pc_key: 'hibernate',
     shutdown_pc_key: 'shutdown'

@@ -214,9 +214,8 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
     server_address = (config.get(ConfigKeys.SERVER_IP), int(config.get(ConfigKeys.SERVER_QUERY_PORT)))
     should_attempt_to_autojoin = config.get(ConfigKeys.JOIN_SERVER_AUTOMATICALLY_ENABLED)
-    close_script_if_game_has_closed = config.get(ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED)
     game_executable = config.get(ConfigKeys.GAME_EXECUTABLE_NAME)
-    sleep_interval_seconds = config.get(ConfigKeys.SLEEP_INTERVAL_SECONDS)
+    lightweight_settings_enabled = config.get(ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED)
 
     if config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED):
         player_threshold = random.randint(config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER),
@@ -245,6 +244,10 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
     settings.init_games_seeding_config()
 
+    if lightweight_settings_enabled:
+        if not utils.process_running(game_executable):
+            apply_lightweight_settings(config)
+
     game_started_by_script = perform_game_launch(config)
 
     autojoin.check_for_shutdown_flag()
@@ -253,6 +256,7 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
         # Delay from when the game was started
         log(f'Game was started by script and autojoin enabled. Starting autojoin.')
         time.sleep(config.get(ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS))
+
         autojoin_successful = autojoin.perform_autojoin(config, game_started_by_script)
 
         if not autojoin_successful:
@@ -274,11 +278,26 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
         restore_last_used_settings(config)
 
     log(f"Your activation threshold is: {player_threshold}")
-    player_count_failed_request_counter = 0
 
-    # TODO move this into it's own function. Perhaps should be run in a separate thread too.
     # Main seeding loop.
-    while player_threshold_not_hit:
+    player_threshold_check_loop(config, game_started_by_script, player_threshold)
+    execute_player_action(config, game_executable, game_started_by_script, user_action)
+    reset_seeding_script_process()
+
+
+def player_threshold_check_loop(config: settings.ScriptConfigFile, game_started_by_script, player_threshold):
+    close_script_if_game_has_closed = config.get(ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED)
+    game_executable = config.get(ConfigKeys.GAME_EXECUTABLE_NAME)
+    sleep_interval_seconds = config.get(ConfigKeys.SLEEP_INTERVAL_SECONDS)
+    server_address = config.get_server_address()
+
+    failed_request_threshold = 3
+    failed_player_request_threshold = 3
+    player_in_server_failure_counter = 0
+    failed_request_counter = 0
+    reconnect_attempts = 0
+
+    while True:
         autojoin.check_for_shutdown_flag()
 
         if close_script_if_game_has_closed:
@@ -293,10 +312,9 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
         if current_player_count is not None:
             now = datetime.datetime.now()
-            current_hour_min = now.strftime("%H:%M")
             pt_player_numbers.append(current_player_count)
             pt_time.append(now)
-            log(f"There are currently {current_player_count} players on the server")
+            log(f"There are currently {current_player_count} players connected to the server")
 
             if current_player_count >= player_threshold:
                 if game_started_by_script:
@@ -304,12 +322,12 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
                 break
         else:
             log('Request to get player count from the server failed. Incrementing attempts until SeedingScript shutdown.')
-            player_count_failed_request_counter += 1
+            failed_request_counter += 1
+
+        if failed_request_counter >= failed_request_threshold:
+            autojoin.autojoin_in_game_state_machine(config)
 
         time.sleep(sleep_interval_seconds)
-
-    execute_player_action(config, game_executable, game_started_by_script, user_action)
-    reset_seeding_script_process()
 
 
 def reset_seeding_script_process(exit_in_thread=False):
@@ -365,6 +383,7 @@ def main():
     if not SCRIPT_CONFIG_SETTINGS_FOLDER.exists():
         SCRIPT_CONFIG_SETTINGS_FOLDER.mkdir()
 
+    # Add a help screen here if the script has not been launched before.
     if not os.path.exists(SCRIPT_CONFIG_SETTINGS_FILE):
         utils.save_json_file(SCRIPT_CONFIG_SETTINGS_FILE, settings.template_config())
         ui.getting_started_window()
@@ -375,13 +394,6 @@ def main():
 
     if not GAME_SETTINGS_BACKUP_FOLDER.exists():
         GAME_SETTINGS_BACKUP_FOLDER.mkdir()
-    # previously_launched = config.get(ConfigKeys.PREVIOUSLY_LAUNCHED_SEEDINGSCRIPT)
-    # log(previously_launched)
-
-    # if config.get(ConfigKeys.PREVIOUSLY_LAUNCHED_SEEDINGSCRIPT):
-    #     ui.getting_started_window()
-
-    # Add a help screen here if the script has not been launched before.
 
     if config.get(ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED):
         settings.init_games_seeding_config()

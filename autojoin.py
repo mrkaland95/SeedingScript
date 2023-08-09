@@ -7,7 +7,6 @@ import cv2
 import easyocr
 import numpy as np
 import pyautogui
-
 import constants
 import main
 import settings
@@ -129,12 +128,14 @@ def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResul
     exit_str = 'exit'
     leave_str = 'leave'
     queue_str = 'queue'
-    server_name_string = config.get(ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN)
     download_str = 'download'
     download_all = 'all'
     cancel_str = 'cancel'
     modded_str = 'mods'
     join_server_str = 'join server'
+    deployment_str = 'deployment'
+    create_squad_str = 'create_squad'
+    server_name_string = config.get(ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN)
 
     split_server = server_name_string.split(" ")
 
@@ -154,19 +155,23 @@ def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResul
     exit_res = find_string_on_screen_from_results(found_ocr_results, 'exit')
     disconnect_res = find_string_on_screen_from_results(found_ocr_results, 'disconnect')
     modded_server_res = find_string_on_screen_from_results(found_ocr_results, 'mods')
-    join_res = find_string_on_screen_from_results(found_ocr_results, join_str)
-    cancel_res = find_string_on_screen_from_results(found_ocr_results, cancel_str)
-    join_server_res = find_string_on_screen_from_results(found_ocr_results, join_server_str)
-    continue_res = find_string_on_screen_from_results(found_ocr_results, continue_str)
+    join_res = find_string_on_screen_from_results(found_ocr_results, 'join')
+    cancel_res = find_string_on_screen_from_results(found_ocr_results, 'cancel')
+    join_server_res = find_string_on_screen_from_results(found_ocr_results, 'join server')
+    continue_res = find_string_on_screen_from_results(found_ocr_results, 'continue')
+    deployment_res = find_string_on_screen_from_results(found_ocr_results, deployment_str)
+    create_squad_res = find_string_on_screen_from_results(found_ocr_results, create_squad_str)
 
     # modded_server_res = match_multiple_strings_to_ocr_results(found_ocr_results, [join_str, server_res])
     server_address = config.get_server_address()
 
     # States/Conditions.
     # This works by looking for phrases, or combinations of phrases that only exist at certain phrases. For example,
-    in_server = (server_rules_res and continue_res) or utils.player_in_server(server_address, config.get(ConfigKeys.PLAYER_NAME))
+    in_server = (server_rules_res and continue_res) or utils.player_in_server(server_address, config.get(ConfigKeys.PLAYER_NAME)) or (
+        deployment_res and create_squad_res
+    )
     found_server = (desired_server_res and in_server_browser_res and favourites_res and not filter_res)
-    in_game_with_escale_menu_open = (exit_res and disconnect_res)
+    in_game_with_escape_menu_open = (exit_res and disconnect_res)
     disconnected = (reconnect_res and cancel_res)
     in_favourites = (in_server_browser_res and favourites_res and not filter_res)
     in_main_menu = main_menu_res and find_match_res
@@ -195,10 +200,6 @@ def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResul
         current_state = AutoJoinStates.FOUND_SERVER
         button_to_click = desired_server_res
 
-    elif in_favourites:
-        current_state = AutoJoinStates.IN_FAVORITES
-        button_to_click = favourites_res
-
     elif in_server_browser:
         current_state = AutoJoinStates.IN_SERVER_BROWSER
         button_to_click = favourites_res
@@ -206,6 +207,10 @@ def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResul
     elif in_main_menu:
         current_state = AutoJoinStates.IN_MAIN_MENU
         button_to_click = main_menu_res
+
+    elif in_favourites:
+        current_state = AutoJoinStates.IN_FAVORITES
+        button_to_click = favourites_res
     else:
         current_state = AutoJoinStates.UNKNOWN
 
@@ -218,6 +223,7 @@ def autojoin_in_game_state_machine(config: ScriptConfigFile) -> bool:
     @param config:
     @return:
     """
+    # TODO create a counter for each individual state, so that if it loops, the loop will be broken
     address = config.get_server_address()
     name = config.get(ConfigKeys.PLAYER_NAME)
     attempts = 0
