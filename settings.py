@@ -13,17 +13,6 @@ from constants import __VERSION__, SCRIPT_CONFIG_SETTINGS_FOLDER, GAME_LAUNCHER_
 VALUE_KEY = 'value'
 DESCRIPTION_KEY = 'description'
 
-# Path globals
-# TESTING_MODE = True
-
-
-
-
-# game_config_path = os.path.abspath(f"{LOCAL_APPDATA}/SquadGame/Saved/Config/WindowsNoEditor")
-
-
-# LOGGING_LEVEL = logging.INFO
-# logging.basicConfig(level=LOGGING_LEVEL)
 LOGGER.setLevel(level=LOGGING_LEVEL)
 
 pyautogui.FAILSAFE = False
@@ -69,7 +58,16 @@ class ScriptConfigFile:
         @param config_file_path: The path to the JSON file.
         """
         self.config_path: Path = config_file_path
-        self._config: dict = self.load_settings()
+
+        # TODO add initialisation of the config file here.
+        # if not config_file_path.exists():
+        #     with open(config_file_path, 'w') as f:
+        #         f.write("")
+
+
+        settings = self._load_settings()
+        self._config: dict = self._update_missing_fields(settings, template_config())
+        self.save_settings()
 
     def __eq__(self, other):
         """
@@ -109,12 +107,24 @@ class ScriptConfigFile:
 
         with open(self.config_path, 'w') as f:
             dump(self._config, f, indent=4)
-        return
+        return self
 
-    def load_settings(self):
+    def _load_settings(self):
         with open(self.config_path, 'r') as f:
             config_file_json = load(f)
+        config_file_json = self._update_missing_fields(config_file_json, template_config())
         return config_file_json
+
+    @staticmethod
+    def _update_missing_fields(existing_dict, template_dict):
+        new_dict = {}
+        for key in template_dict:
+            new_dict[key] = existing_dict.get(key, template_dict[key])
+
+        return new_dict
+
+    def reload_settings(self):
+        self._config: dict = self._load_settings()
 
     def reset_to_defaults(self):
         self._config = template_config()
@@ -240,6 +250,18 @@ def template_config():
         ConfigKeys.DONT_START_GAME_IF_SERVER_ABOVE_THRESHOLD: {
             VALUE_KEY: True,
             DESCRIPTION_KEY: "Setting to specify if the script should still launch the game if the server is already above the player threshold."
+        },
+        ConfigKeys.SCRIPT_AUTO_START_THRESHOLD: {
+            VALUE_KEY: 20,
+            DESCRIPTION_KEY: 'The lower bound of players of where the automatic "watcher" thread will launch the part of the script that autojoins and performs the desired user action.'
+        },
+        ConfigKeys.SCRIPT_AUTO_START_LOWER_TIME: {
+            VALUE_KEY: "11:00",
+            DESCRIPTION_KEY: 'The lower bound of players of where the automatic "watcher" thread will launch the part of the script that autojoins and performs the desired user action.'
+        },
+        ConfigKeys.SCRIPT_AUTO_START_UPPER_TIME: {
+            VALUE_KEY: "12:00",
+            DESCRIPTION_KEY: 'The lower bound of players of where the automatic "watcher" thread will launch the part of the script that autojoins and performs the desired user action.'
         }
     }
 
@@ -352,7 +374,7 @@ def testing_config():
         ConfigKeys.LIGHTWEIGHT_SETTINGS_CURRENTLY_APPLIED: {
             VALUE_KEY: False,
             DESCRIPTION_KEY: 'This is here to have a consistent variable to see if a user has had their settings restored'
-        }
+        },
     }
 
     return seedingscript_config
@@ -388,8 +410,6 @@ def init_games_seeding_config():
         except FileExistsError:
             return False
 
-    initialise_swap_file(seeding_settings_swap_file)
-
     if not path.exists(last_used_file):
         shutil.copyfile(original_config_file, last_used_file)
 
@@ -398,6 +418,8 @@ def init_games_seeding_config():
 
     if not path.exists(backup_config_file_secondary):
         shutil.copyfile(original_config_file, backup_config_file_secondary)
+
+    initialise_swap_file(seeding_settings_swap_file)
 
     return True
 

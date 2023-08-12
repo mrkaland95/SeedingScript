@@ -7,5 +7,4 @@
 
 
 * You cannot seemingly use the logging framework in conjunction with the PySimpleGUI library.
-
-* Add ability to get the current player count with a button. 
+* NOTE: The "__pycache__" directory should be deleted before doing a build, if a new source file has been added to the project.
