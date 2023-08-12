@@ -92,7 +92,7 @@ def check_for_shutdown_flag():
     @return:
     """
     if constants.STOP_SEEDINGSCRIPT:
-        utils.log(f'AutoSeeding shutdown flag registered. Shutting down.')
+        utils.log(f'Seeding thread shutdown flag registered. Shutting down seeding thread.')
         main.reset_seeding_script_process()
         sys.exit()
 
@@ -110,11 +110,17 @@ class OCRResult:
 
 
 def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResult]) -> tuple[AutoJoinStates, OCRResult | None]:
+    """
+    Function responsible for checking the screen for which state the autojoin process is in.
+    Essentially works by looking for certain text that should only be found at certain states.
+    @param config:
+    @param found_ocr_results:
+    @return:
+    """
     button_to_click = None
     main_menu_to_server_browser_string = 'servers'
     server_browser_string = 'server browser'
-    server_rules_str = 'server rules'
-    favourites_str = 'favorites'
+    favorites_string = 'favorites'
     search_string = 'search'
     filter_string = 'filter'
     reconnect_string = 'reconnect'
@@ -135,16 +141,16 @@ def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResul
     join_server_str = 'join server'
     deployment_str = 'deployment'
     create_squad_str = 'create_squad'
-    server_name_string = config.get(ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN)
+    server_name_string = config.get(ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN).strip()
 
     split_server = server_name_string.split(" ")
 
     desired_server_res = find_string_on_screen_from_results(found_ocr_results, server_name_string)
     find_match_res = find_string_on_screen_from_results(found_ocr_results, 'find match')
-    in_server_browser_res = find_string_on_screen_from_results(found_ocr_results, 'server browser')
-    favourites_res = find_string_on_screen_from_results(found_ocr_results, 'favorites')
+    server_browser = find_string_on_screen_from_results(found_ocr_results, 'server browser')
+    favourites_res = find_string_on_screen_from_results(found_ocr_results, favorites_string)
     search_res = find_string_on_screen_from_results(found_ocr_results, 'search')
-    filter_res = find_string_on_screen_from_results(found_ocr_results, 'filter')
+    filter_res = find_string_on_screen_from_results(found_ocr_results, filter_string)
     main_menu_res = find_string_on_screen_from_results(found_ocr_results, main_menu_to_server_browser_string)
     server_rules_res = find_string_on_screen_from_results(found_ocr_results, 'server rules')
     server_res = find_string_on_screen_from_results(found_ocr_results, 'server')
@@ -165,40 +171,48 @@ def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResul
     # modded_server_res = match_multiple_strings_to_ocr_results(found_ocr_results, [join_str, server_res])
     server_address = config.get_server_address()
 
+    # if filter_res:
+    #     print(filter_res.confidence)
+
     # States/Conditions.
     # This works by looking for phrases, or combinations of phrases that only exist at certain phrases. For example,
-    in_server = (server_rules_res and continue_res) or utils.player_in_server(server_address, config.get(ConfigKeys.PLAYER_NAME)) or (
+    found_server = (desired_server_res and server_browser and favourites_res)
+
+    # in_game_with_escape_menu_open = (exit_res and disconnect_res)
+    disconnected = (reconnect_res and cancel_res)
+    in_favourites = (server_browser and favourites_res and not filter_res)
+    in_main_menu = main_menu_res and find_match_res
+    in_server_browser = (server_browser and favourites_res)
+    in_queue = leave_res and queue_res
+    # clicked_on_server = (join_server_res and desired_server_res)
+    clicked_modded_server = modded_server_res and cancel_res and join_res
+    in_server = (server_rules_res and continue_res and not server_browser and not favourites_res) or utils.player_in_server(server_address, config.get(ConfigKeys.PLAYER_NAME)) or (
         deployment_res and create_squad_res
     )
-    found_server = (desired_server_res and in_server_browser_res and favourites_res and not filter_res)
-    in_game_with_escape_menu_open = (exit_res and disconnect_res)
-    disconnected = (reconnect_res and cancel_res)
-    in_favourites = (in_server_browser_res and favourites_res and not filter_res)
-    in_main_menu = main_menu_res and find_match_res
-    in_server_browser = in_server_browser_res and filter_res
-    in_queue = leave_res and queue_res
-    clicked_on_server = (join_server_res and desired_server_res)
-    clicked_modded_server = modded_server_res and cancel_res and join_res
 
     if in_server:
         current_state = AutoJoinStates.IN_SERVER
         button_to_click = None
 
-    elif in_queue:
-        current_state = AutoJoinStates.IN_QUEUE
-        button_to_click = None
-
-    elif disconnected:
-        current_state = AutoJoinStates.DISCONNECTED
-        button_to_click = reconnect_res
+    elif found_server:
+        current_state = AutoJoinStates.FOUND_SERVER
+        button_to_click = desired_server_res
 
     elif clicked_modded_server:
         current_state = AutoJoinStates.MODDED_SERVER
         button_to_click = join_res
 
-    elif found_server:
-        current_state = AutoJoinStates.FOUND_SERVER
-        button_to_click = desired_server_res
+    elif disconnected:
+        current_state = AutoJoinStates.DISCONNECTED
+        button_to_click = reconnect_res
+
+    elif in_queue:
+        current_state = AutoJoinStates.IN_QUEUE
+        button_to_click = None
+
+    elif in_favourites:
+        current_state = AutoJoinStates.IN_FAVORITES
+        button_to_click = favourites_res
 
     elif in_server_browser:
         current_state = AutoJoinStates.IN_SERVER_BROWSER
@@ -208,9 +222,6 @@ def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResul
         current_state = AutoJoinStates.IN_MAIN_MENU
         button_to_click = main_menu_res
 
-    elif in_favourites:
-        current_state = AutoJoinStates.IN_FAVORITES
-        button_to_click = favourites_res
     else:
         current_state = AutoJoinStates.UNKNOWN
 
@@ -267,7 +278,7 @@ def autojoin_in_game_state_machine(config: ScriptConfigFile) -> bool:
 
         elif current_state is AutoJoinStates.UNKNOWN:
             attempts += 1
-            time.sleep(5)
+            time.sleep(10)
 
         elif current_state is AutoJoinStates.IN_QUEUE:
             delay = 30
@@ -282,6 +293,9 @@ def autojoin_in_game_state_machine(config: ScriptConfigFile) -> bool:
             iteration_time = time.time() - start_time
             if iteration_time < 10:
                 time.sleep(10 - iteration_time)
+            if button_to_click:
+                pyautogui.click(button_to_click.x, button_to_click.y)
+                pyautogui.moveRel(0, 70)
 
         else:
             if button_to_click:
@@ -309,27 +323,54 @@ def autojoin_in_game_state_machine(config: ScriptConfigFile) -> bool:
     return True
 
 
-def find_string_on_screen_from_results(strings: list[OCRResult], text: str, exact=False) -> OCRResult | None:
+def find_string_on_screen_from_results(strings: list[OCRResult], text: str, exact=False, required_confidence: float = 0.5) -> OCRResult | None:
     """
     Function responsible for finding a string inside an OCRResult object(i.e a piece of text and it's position)
 
-    @param exact:
-    @param strings:
-    @param text:
+    @param exact: Whether the string should match a result exactly, or if the string is allowed to be a substring of the result
+    @param text: The text that is to be found.
+    @param strings: The found strings on the screen.
+    @param required_confidence: Required confidence level of the match.
     @return:
     """
     # TODO functionality that can take in a list of strings to be found, where the position will be averaged out, given a maximum distance
-
+    # TODO implements checks to ensure that all results has to come within the bounds of the window.
     max_pixel_distance = 100
     for item in strings:
-        if exact:
-            if text.lower() == item.text.lower():
-                return item
-        else:
-            if text.lower() in item.text.lower():
-                return item
+        # utils.force_window_to_foreground(utils.find_window_hwnd())
+        # bounds = pyautogui.getWindowsWithTitle('SquadGame')
 
-    return None
+        if exact:
+            if not text.lower() == item.text.lower():
+                continue
+        else:
+            if not text.lower() in item.text.lower():
+                continue
+
+        if not item.confidence >= required_confidence:
+            continue
+
+        bounds = utils.get_window_bounds()
+        x = bounds[0]
+        y = bounds[1]
+        x_2 = bounds[2]
+        y_2 = bounds[3]
+        # Checks if the item is within the bounds of the window.
+        # Used primarily to filter out false positives.
+        if not x <= item.x <= x_2:
+            continue
+        elif not y <= item.y <= y_2:
+            continue
+
+        return item
+
+
+# def find_string_on_screen_from_results(strings: list[OCRResult], text: str) -> OCRResult | None:
+#     for item in strings:
+#         if text.lower() in item.text.lower():
+#             return item
+#
+#     return None
 
 
 def get_text_distance(ocr_result_1: OCRResult, ocr_result_2: OCRResult):
@@ -382,29 +423,41 @@ def get_all_text_ocr(reader: easyocr.Reader) -> list[OCRResult]:
     # Convert the PIL Image to OpenCV format (numpy array)
     screenshot = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
 
-    gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+    # screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
 
     # Perform OCR using EasyOCR
-    result = reader.readtext(gray_screenshot, detail=1, batch_size=10)
+    result = reader.readtext(screenshot, detail=1, batch_size=10)
 
     results = []
 
     for item in result:
-        a = OCRResult(item)
-        results.append(a)
+        results.append(OCRResult(item))
 
     return results
 
 
-def test_autojoin():
+def test_full_autojoin():
     config = ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
     perform_autojoin(config, game_started_by_script=False)
+
 
 def test_statemachine():
     config = ScriptConfigFile(SCRIPT_CONFIG_SETTINGS_FILE)
     autojoin_in_game_state_machine(config)
 
+
+def test_reader_and_relative_paths():
+
+    if getattr(sys, 'frozen', False):
+        model_directory = "./model_data"
+    else:
+        model_directory = Path(os.path.dirname(__file__)) / 'assets/model_data'
+        model_directory = model_directory.__str__()
+
+    reader = easyocr.Reader(['en'], gpu=False, verbose=False, model_storage_directory=model_directory)
+
 if __name__ == '__main__':
+    # test()
     # test_autojoin()
     test_statemachine()
     pass

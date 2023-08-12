@@ -54,7 +54,7 @@ class TestOCR(unittest.TestCase):
 
     def test_find_match(self):
         result = autojoin.get_all_text_ocr(TestOCR.reader)
-        test = find_string_on_screen_from_results('find match', result)
+        test = find_string_on_screen_from_results(result, 'find match')
 
     def test_split_strings(self):
         text = autojoin.get_all_text_ocr(TestOCR.reader)

@@ -6,7 +6,6 @@ import shutil
 import socket
 import subprocess
 import time
-
 import a2s.exceptions
 import a2s
 import psutil
@@ -14,11 +13,11 @@ import pyautogui
 import pythoncom
 import win32com.client
 import win32gui
+import constants
 from pathlib import Path
 from datetime import datetime
 from a2s import players
 from json import dump
-
 from constants import SCRIPT_CONFIG_SETTINGS_FOLDER, LOG_FOLDER, LOGFILE
 
 
@@ -85,12 +84,15 @@ def player_in_server(server_address: tuple[str, int], name: str) -> bool | None:
                 break
 
     except a2s.BufferExhaustedError:
-        log('Bug in the a2s module when trying to fetch the player list.')
-        log('For the time being there is no fix for this.')
+        log('BufferExhaustedError in the module used to query the server for the player list.')
+        log('This is a known bug that occurs when the server reaches ~80 players. \n'
+            'Finding an alternative or a custom implementation of the steam query protocol is planned, but not very high priority.')
         in_server = None
 
     except Exception as err:
-        log(err)
+        log(f'Error when trying to check if the player was in the server.', True)
+        log(f'Error type: {type(err).__name__}')
+        log(err.__str__(), True)
         in_server = None
 
     return in_server
@@ -103,12 +105,12 @@ def get_info(server_address: tuple[str, int], attempts: int = 3):
             return info
 
         except a2s.BufferExhaustedError as err:
-            log(f'Buffer Exhausted Error')
-            log(f'Err data {err.__str__()}')
+            log(f'Buffer Exhausted Error, unable to retrieve server info')
+            log(f'Err data {err.__str__()}', write_to_file_only=True)
             return None
 
         except Exception as err:
-            log(f'Error when trying to retrieve info from the server.', True)
+            log(f'Error when trying to retrieve info from the server.')
             log(f'Error type: {type(err).__name__}')
             log(err.__str__(), True)
             return None
@@ -194,7 +196,7 @@ def process_running(executable):
         return game_running
     except Exception as error:
         log("Something went wrong in finding the game process, writing error to log file.")
-        log(f'Error type: {error.__class__}')
+        log(f'Error type: {type(error).__name__}')
         log(error.__str__(), True)
 
 
@@ -214,6 +216,42 @@ def find_window_size(hwnd) -> (int, int):
         # Window was not found or was otherwise unable to be read. This may happen if the window was not in the
         # foreground.
         return None, None
+
+
+# def get_window_bounds(hwnd: int) -> (int, int, int, int):
+#     try:
+#         # The game cannot be minimized when getting the window size, so forcing it to the foreground gets around that.
+#         rect = win32gui.GetClientRect(hwnd)
+#         x = rect[0]
+#         y = rect[1]
+#         w = rect[2] - x
+#         h = rect[3] - y
+#         return x, y, w, h
+#
+#     except Exception as err:
+#         log(f'{err}')
+#         # Window was not found or was otherwise unable to be read. This may happen if the window was not in the
+#         # foreground.
+#         return None, None, None, None
+
+
+def get_window_bounds() -> (int, int, int, int):
+    try:
+        # The game cannot be minimized when getting the window size, so forcing it to the foreground gets around that.
+        rect = pyautogui.getWindowsWithTitle('SquadGame')[0]
+        x = rect.left
+        y = rect.top
+        x_2 = rect.width + x
+        y_2 = rect.height + y
+        return x, y, x_2, y_2
+
+    except Exception as err:
+        log(f'{err}')
+        # Window was not found or was otherwise unable to be read. This may happen if the window was not in the
+        # foreground.
+        return None, None, None, None
+
+
 
 
 def force_window_to_foreground(window_handle):
@@ -308,12 +346,13 @@ def launch_game(game_launcher, game_url):
         subprocess.run(f'start {game_url}', shell=True)
     except Exception as error:
         log(f'Primary method of launching game failed, trying secondary method. Writing error to log file')
+        log(f'Error type: {type(error).__name__}')
         log(f'{error.__str__()}', True)
         try:
             # I added this as a backup incase the gamestart call to steam would not work.
             subprocess.run(game_launcher)
         except Exception as error:
-            log(error)
+            log(f'Error type: {type(error).__name__}')
             log('Something went wrong when trying to start the game')
             log('Make sure that your set path to the game is set correctly in the "seedingconfig.ini" file')
             log('Another possibility might be that the game is already running')

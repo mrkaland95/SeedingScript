@@ -11,8 +11,6 @@ rem Install PyInstaller if needed
 pip install pyinstaller
 
 rem Compile the script into an executable
-:: pyinstaller --onefile --noconsole --add-data "C:\Program Files\Tesseract-OCR;Tesseract-OCR" --collect-all easyocr --name %EXECUTABLE_NAME% --hidden-import=skimage.exposure %SCRIPT_NAME%
-:: pyinstaller --onefile --noconsole --add-data "C:\Users\mrkal\.EasyOCR;Easy-OCR" --collect-all easyocr --name %EXECUTABLE_NAME% --hidden-import=skimage.exposure %SCRIPT_NAME%
 pyinstaller --onefile --noconsole --collect-all easyocr --name %EXECUTABLE_NAME% --hidden-import=skimage.exposure %SCRIPT_NAME%
 
 del %EXECUTABLE_NAME%.spec

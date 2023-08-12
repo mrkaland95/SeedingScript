@@ -9,18 +9,17 @@ import threading
 import time
 import keyboard
 import pyautogui
-
-import constants
 import settings
 import utils
 import autojoin
 import ui
-
+import constants as constants
 
 from pathlib import Path
 from settings import ConfigKeys
 from utils import (hibernate, close_process, launch_game, log)
-from constants import SCRIPT_CONFIG_SETTINGS_FOLDER, GAME_SETTINGS_BACKUP_FOLDER, SCRIPT_CONFIG_SETTINGS_FILE, pt_time, pt_player_numbers
+from constants import (SCRIPT_CONFIG_SETTINGS_FOLDER, GAME_SETTINGS_BACKUP_FOLDER, SCRIPT_CONFIG_SETTINGS_FILE, PT_TIME_STAMP,
+                       PT_PLAYER_NUMBERS)
 
 # LOCAL_APPDATA = Path(os.environ.get('LOCALAPPDATA'))
 # SCRIPT_CONFIG_SETTINGS_FOLDER = LOCAL_APPDATA / 'SeedingScript'
@@ -33,8 +32,6 @@ from constants import SCRIPT_CONFIG_SETTINGS_FOLDER, GAME_SETTINGS_BACKUP_FOLDER
 # game_launcher_path_32 = f'{programfiles_32}/Steam/steamapps/common/Squad/squad_launcher.exe'
 # game_launcher_path_64 = f'{programfiles_64}/Steam/steamapps/common/Squad/squad_launcher.exe'
 # game_launcher_path = game_launcher_path_32 if os.path.exists(game_launcher_path_32) else game_launcher_path_64
-
-pyautogui.FAILSAFE = False
 
 ##############################################################################################
 # Global bools
@@ -53,14 +50,15 @@ Features to be added:
 """
 # TODO 4 - Add profiles for switching between settings for different servers.
 # TODO 5 - Add new states for being in queue, for rejoining a server, and for joining a modded server, in settings.
-# TODO 6 - Add a check/window for the server address if the script is started headless.
 # TODO 8 - Maybe add the possibility to add a shortcut to the start menu.
 # TODO 11 - Window that indicates that an error has happend. For example if there was no server address stored.
 # TODO add ability to lower the program in the system tray.
 # TODO Make a virtual environment(venv) so that only the necessary packages are included in the build.
 # TODO add a better check for which set of config files is currently active.
-# TODO add a setting for shutting down the GUI after completing an action.
-# TODO update the graph code so the graph only redraws if new data has been added.
+# TODO Create a window that opens and gives the user some time to stop the seeding thread if there is an action stored.
+# TODO Implement a system that automatically starts the seeding thread based on player numbers and time frame.
+# TODO need to create some mechanism that exits the autojoin if it keeps trying to join a server but is unable to do so.
+# TODO fix the JSON file updating code(code for adding fields that are not in the saved field etc)
 """
 For that, can potentially check each setting individually, and if a certain amount of them are different, then overwrite etc.
 
@@ -117,8 +115,7 @@ def apply_lightweight_settings(config: settings.ScriptConfigFile):
     shutil.copyfile(lightweight_config, active_config)
 
 
-def restore_last_used_settings(config: settings.ScriptConfigFile,
-                               compare_settings: bool = True):
+def restore_last_used_settings(config: settings.ScriptConfigFile):
     """
     Restores user's original config file to the game when called
     :return:
@@ -137,11 +134,6 @@ def restore_last_used_settings(config: settings.ScriptConfigFile,
     Beacuse the files are being loaded and changed when squad launches,
     We may need to have a delay before restoring the game's settings, otherwise the game will just overwrite them.
     """
-
-
-def restore_with_delay(config: settings.ScriptConfigFile, delay: float):
-    time.sleep(delay)
-    restore_last_used_settings(config)
 
 
 def restore_original_settings(config: settings.ScriptConfigFile):
@@ -188,7 +180,7 @@ def cmdline_argument_handler(config: settings.ScriptConfigFile):
         restore_last_used_settings(config)
         sys.exit(0)
 
-    return args.close or args.shutdown
+    return args.close or args.hibernate or args.shutdown
 
 
 def watch_for_interrupt():
@@ -208,8 +200,6 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
     """
 
     # TODO make the reconnect functionality work again.
-    game_started_by_script = False
-    player_threshold_not_hit = True
     perform_main_seeding_loop = True
 
     server_address = (config.get(ConfigKeys.SERVER_IP), int(config.get(ConfigKeys.SERVER_QUERY_PORT)))
@@ -286,10 +276,13 @@ def seeding_pipeline(user_action: str, config: settings.ScriptConfigFile):
 
 
 def player_threshold_check_loop(config: settings.ScriptConfigFile, game_started_by_script, player_threshold):
+    config.reload_settings()
     close_script_if_game_has_closed = config.get(ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED)
     game_executable = config.get(ConfigKeys.GAME_EXECUTABLE_NAME)
     sleep_interval_seconds = config.get(ConfigKeys.SLEEP_INTERVAL_SECONDS)
     server_address = config.get_server_address()
+    player_name = config.get(ConfigKeys.PLAYER_NAME)
+    autojoin.check_for_shutdown_flag()
 
     failed_request_threshold = 3
     failed_player_request_threshold = 3
@@ -298,34 +291,54 @@ def player_threshold_check_loop(config: settings.ScriptConfigFile, game_started_
     reconnect_attempts = 0
 
     while True:
+        config.reload_settings()
+
         autojoin.check_for_shutdown_flag()
 
         if close_script_if_game_has_closed:
             if not utils.process_running(game_executable):
                 if game_started_by_script:
-                    restore_last_used_settings(config, compare_settings=False)
+                    restore_last_used_settings(config)
                 log("Game not running, exiting seeding process")
                 sys.exit()
 
-        # TODO add handling for whatever needs to happen if the player count is none.
         current_player_count = utils.get_current_playercount(server_address)
+        player_in_server = utils.player_in_server(server_address, player_name)
+        if not player_in_server:
+            player_in_server_failure_counter += 1
+        else:
+            player_in_server_failure_counter = 0
 
         if current_player_count is not None:
             now = datetime.datetime.now()
-            pt_player_numbers.append(current_player_count)
-            pt_time.append(now)
+            PT_PLAYER_NUMBERS.append(current_player_count)
+            PT_TIME_STAMP.append(now)
+            constants.DATA_UPDATED = True
             log(f"There are currently {current_player_count} players connected to the server")
 
             if current_player_count >= player_threshold:
                 if game_started_by_script:
                     restore_last_used_settings(config)
                 break
+
+            failed_request_counter = 0
         else:
             log('Request to get player count from the server failed. Incrementing attempts until SeedingScript shutdown.')
             failed_request_counter += 1
 
-        if failed_request_counter >= failed_request_threshold:
-            autojoin.autojoin_in_game_state_machine(config)
+        if not config.get(ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER):
+            if failed_request_counter >= failed_request_threshold:
+                if not autojoin.autojoin_in_game_state_machine(config):
+                    reconnect_attempts += 1
+                else:
+                    reconnect_attempts = 0
+                    failed_request_counter = 0
+            elif player_in_server_failure_counter >= failed_player_request_threshold:
+                if not autojoin.autojoin_in_game_state_machine(config):
+                    reconnect_attempts += 1
+                else:
+                    player_in_server_failure_counter = 0
+                    reconnect_attempts = 0
 
         time.sleep(sleep_interval_seconds)
 
@@ -339,7 +352,7 @@ def reset_seeding_script_process(exit_in_thread=False):
 
 def execute_player_action(config, game_executable, game_started_by_script, user_action):
     if user_action == 'hibernate':
-        if not game_started_by_script:
+        if game_started_by_script:
             # Restores back to original settings if the game wasn't already started
             restore_last_used_settings(config)
         close_process(game_executable)
@@ -348,6 +361,11 @@ def execute_player_action(config, game_executable, game_started_by_script, user_
 
     elif user_action == 'shutdown':
         utils.shutdown_computer()
+        sys.exit()
+
+    elif user_action == 'close':
+        close_process(game_executable)
+        restore_if_started_by_script(config, game_started_by_script)
         sys.exit()
     else:
         # Assumes close the game for anything else.

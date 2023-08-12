@@ -3,7 +3,7 @@ from datetime import datetime
 from os import environ
 from pathlib import Path
 
-__VERSION__ = "3.0.0b2"
+__VERSION__ = "3.0.0b3"
 GUI_WINDOW_THEME = 'DarkGrey14'
 GUI_FONT = ('helvetica', 15)
 
@@ -61,5 +61,7 @@ else:
 SEEDING_PROCESS = None
 STOP_SEEDINGSCRIPT = False
 GAME_STARTED_BY_SCRIPT = False
-pt_time = []
-pt_player_numbers = []
+PT_TIME_STAMP = []
+PT_PLAYER_NUMBERS = []
+DATA_UPDATED = False
+
