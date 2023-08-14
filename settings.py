@@ -48,6 +48,7 @@ class ConfigKeys(StrEnum):
     SCRIPT_AUTO_START_THRESHOLD = auto()
     SCRIPT_AUTO_START_UPPER_TIME = auto()
     SCRIPT_AUTO_START_LOWER_TIME = auto()
+    GAME_WINDOW_TITLE = auto()
 
 
 class ScriptConfigFile:
@@ -262,6 +263,10 @@ def template_config():
         ConfigKeys.SCRIPT_AUTO_START_UPPER_TIME: {
             VALUE_KEY: "12:00",
             DESCRIPTION_KEY: 'The lower bound of players of where the automatic "watcher" thread will launch the part of the script that autojoins and performs the desired user action.'
+        },
+        ConfigKeys.GAME_WINDOW_TITLE: {
+            VALUE_KEY: 'SquadGame',
+            DESCRIPTION_KEY: 'The title used to recognise the game window.'
         }
     }
 
@@ -454,7 +459,7 @@ def initialise_swap_file(swap_file_path: Path):
     mainsection['FilterMaxPing'] = "500"
     with open(swap_file_path, "w") as writefile:
         parser.write(writefile)
-    return
+
 
 
 def compare_lightweight_to_active_config_file(active_config_file: Path, lightweight_config_file: Path) -> bool:
