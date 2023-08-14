@@ -367,7 +367,7 @@ def startup_warning_window():
         [sg.Button('Cancel', key=cancel_key), sg.Button('Continue', key=continue_key)]
     ]
 
-    window = sg.Window('Continue with action?', layout=layout)
+    window = sg.Window('Continue with action?', layout=layout, element_justification='c')
 
     while True:
         event, values = window.read(300)
@@ -506,7 +506,7 @@ def settings_window(config: ScriptConfigFile,
                              'Do note that an accurate player name should be specified if this setting is enabled,\n'
                              'Otherwise the script will attempt to constantly reconnect beacuse it is not detecting the player in the game')],
 
-                [sg.Frame("Stored script action - Not fully tested yet",
+                [sg.Frame("Stored script action - Performed automatically on launch",
                           layout=[[radio_button_none, radio_button_close, radio_button_hibernate, radio_button_shutdown]],
                           font=default_text_font, tooltip="Stores actions that will be performed automatically when the script launches.")],
 
