@@ -171,9 +171,10 @@ def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResul
     # modded_server_res = match_multiple_strings_to_ocr_results(found_ocr_results, [join_str, server_res])
     server_address = config.get_server_address()
 
-    # if filter_res:
-    #     print(filter_res.confidence)
 
+    if filter_res:
+        print(filter_res.confidence)
+    #
     # States/Conditions.
     # This works by looking for phrases, or combinations of phrases that only exist at certain phrases. For example,
     found_server = (desired_server_res and server_browser and favourites_res)
@@ -182,7 +183,7 @@ def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResul
     disconnected = (reconnect_res and cancel_res)
     in_favourites = (server_browser and favourites_res and not filter_res)
     in_main_menu = main_menu_res and find_match_res
-    in_server_browser = (server_browser and favourites_res)
+    in_server_browser = (server_browser and favourites_res and filter_res)
     in_queue = leave_res and queue_res
     # clicked_on_server = (join_server_res and desired_server_res)
     clicked_modded_server = modded_server_res and cancel_res and join_res
@@ -210,12 +211,12 @@ def get_current_state(config: ScriptConfigFile, found_ocr_results: list[OCRResul
         current_state = AutoJoinStates.IN_QUEUE
         button_to_click = None
 
-    elif in_favourites:
-        current_state = AutoJoinStates.IN_FAVORITES
-        button_to_click = favourites_res
-
     elif in_server_browser:
         current_state = AutoJoinStates.IN_SERVER_BROWSER
+        button_to_click = favourites_res
+
+    elif in_favourites:
+        current_state = AutoJoinStates.IN_FAVORITES
         button_to_click = favourites_res
 
     elif in_main_menu:
@@ -289,13 +290,13 @@ def autojoin_in_game_state_machine(config: ScriptConfigFile) -> bool:
             pyautogui.doubleClick(button_to_click.x, button_to_click.y, interval=0.06)
             # utils.log('Clicked on server, waiting to see if the join was successful.')
 
-        elif current_state is AutoJoinStates.IN_FAVORITES:
-            iteration_time = time.time() - start_time
-            if iteration_time < 10:
-                time.sleep(10 - iteration_time)
-            if button_to_click:
-                pyautogui.click(button_to_click.x, button_to_click.y)
-                pyautogui.moveRel(0, 70)
+        # elif current_state is AutoJoinStates.IN_FAVORITES:
+        #     iteration_time = time.time() - start_time
+        #     if iteration_time < 10:
+        #         time.sleep(10 - iteration_time)
+        #     if button_to_click:
+        #         pyautogui.click(button_to_click.x, button_to_click.y)
+        #         pyautogui.moveRel(0, 70)
 
         else:
             if button_to_click:
