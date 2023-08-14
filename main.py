@@ -424,6 +424,10 @@ def main():
     if chosen_script_action is None:
         chosen_script_action = config.get(ConfigKeys.DEFAULT_USER_ACTION)
 
+    if chosen_script_action:
+        if not ui.startup_warning_window():
+            chosen_script_action = None
+
     ui.main_window(chosen_script_action)
 
 

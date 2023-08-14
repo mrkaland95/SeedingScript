@@ -37,9 +37,9 @@ GAME_SETTINGS_BACKUP_FOLDER = SCRIPT_CONFIG_SETTINGS_FOLDER / 'GameSettingsBacku
 LOGGING_LEVEL = logging.DEBUG
 LOGGER = logging.getLogger(__name__)
 
-close_game_key = '-CLOSE_GAME-'
-hibernate_pc_key = '-HIBERNATE-'
-shutdown_pc_key = '-SHUTDOWN-'
+close_game_key = 'close'
+hibernate_pc_key = 'hibernate'
+shutdown_pc_key = 'shutdown'
 none_key = 'none'
 
 user_actions = {

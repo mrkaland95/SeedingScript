@@ -1,6 +1,8 @@
 import datetime
 import subprocess
 import sys
+import time
+
 import PySimpleGUI as sg
 import main
 import utils
@@ -204,11 +206,11 @@ def main_window(chosen_action: str | None,
     # sets the colour of the graph
     # sets the background colour of everything else.
     figure_canvas_agg.get_tk_widget().configure(background=colour_hex)
-    graph_hidden = False
-    graph_hidden_before_enough_data = True
+    graph_visible = True
+    initial_graph_shown = False
 
     while True:
-        event, values = window.read(timeout=1000)
+        event, values = window.read(timeout=500)
 
         if event in ('Exit', sg.WIN_CLOSED):
             constants.PROGRAM_SHUTDOWN = True
@@ -219,7 +221,9 @@ def main_window(chosen_action: str | None,
                 constants.SEEDING_PROCESS = None
 
         if chosen_action in user_actions.values():
-            if not (constants.SEEDING_PROCESS and constants.SEEDING_PROCESS.is_alive()):
+            if constants.SEEDING_PROCESS and constants.SEEDING_PROCESS.is_alive():
+                chosen_action = None
+            else:
                 if not launched_script_given_action:
                     log(f'Launching seeding script from the stored or given user action')
                     log(f'The action to be performed is : {chosen_action}')
@@ -228,42 +232,14 @@ def main_window(chosen_action: str | None,
 
         if event == toggle_graph_visibility_key:
             log('Toggled graph visibility', True)
-            graph_hidden = not graph_hidden
-            window[canvas_key].update(visible=graph_hidden)
+            if len(constants.PT_TIME_STAMP) < 2:
+                log(f'There is not enough data to toggle the graph on\n. '
+                    f'Either start the SeedingScript thread or fetch info from the server via the ',
+                    write_to_stdout_only=True)
 
-        if len(constants.PT_TIME_STAMP) >= 2 and constants.DATA_UPDATED:
+            graph_visible = not graph_visible
 
-            # TODO the redrawing is not currently working correctly.
-            if graph_hidden_before_enough_data:
-                log(f'Retrieved enough data to display the graph', True)
-                window[canvas_key].update(visible=True)
-                graph_hidden_before_enough_data = False
-                graph_hidden = False
-
-            latest_pt_time = constants.PT_TIME_STAMP[-constants.SAMPLE_MAX:]
-            latest_pt_player_numbers = constants.PT_PLAYER_NUMBERS[-constants.SAMPLE_MAX:]
-
-            ax.cla()
-            ax.tick_params(colors='white')
-            ax.yaxis.set_major_locator(ticker.MultipleLocator(10))
-            date_format = mdates.DateFormatter('%H:%M')
-            # ax.xaxis.set_major_locator(ticker.MaxNLocator(5))
-            ax.xaxis.set_major_formatter(date_format)
-            ax.set_ylim(0, 120)
-            ax.set_xlabel('Time', color='white')
-            ax.set_ylabel('Players', color='white')
-            ax.set_title('Player count over time(included players in queue)', color='white')
-            ax.grid()
-            ax.plot(latest_pt_time, latest_pt_player_numbers, color='white')
-            figure_canvas_agg.draw()
-            constants.DATA_UPDATED = False
-
-        elif not graph_hidden:
-            # If there's no data to plot and the graph is currently visible, hide the graph
-            window[canvas_key].update(visible=False)
-            graph_hidden = True
-
-        if event == restore_settings_key:
+        elif event == restore_settings_key:
             log(f'Clicked "Restore Last Used Settings"', True)
             main.restore_last_used_settings(config)
 
@@ -329,7 +305,7 @@ def main_window(chosen_action: str | None,
         # if not, it means that a process has been initialized,
         # In which case the process will be killed, and reset to None.
         # This makes it easy to check avoid launching multiple instances of the same process.
-        if event == stop_seeding_key:
+        elif event == stop_seeding_key:
             if not constants.SEEDING_PROCESS:
                 log('No active seeding thread.')
                 continue
@@ -341,9 +317,73 @@ def main_window(chosen_action: str | None,
                     'This process can take some amount of time, depending on the current state of the autojoin execution.'
                     'If it does not stop within about a minute at the most, close the main window.')
 
+
+        if len(constants.PT_TIME_STAMP) >= 2:
+            if not initial_graph_shown:
+                graph_visible = True
+                initial_graph_shown = True
+
+            window[canvas_key].update(visible=graph_visible)
+
+            # Only want to redraw the graph if new data is added.
+            if constants.DATA_UPDATED:
+                latest_pt_time = constants.PT_TIME_STAMP[-constants.SAMPLE_MAX:]
+                latest_pt_player_numbers = constants.PT_PLAYER_NUMBERS[-constants.SAMPLE_MAX:]
+
+                ax.cla()
+                ax.tick_params(colors='white')
+                ax.yaxis.set_major_locator(ticker.MultipleLocator(10))
+                date_format = mdates.DateFormatter('%H:%M')
+                # ax.xaxis.set_major_locator(ticker.MaxNLocator(5))
+                ax.xaxis.set_major_formatter(date_format)
+                ax.set_ylim(0, 120)
+                ax.set_xlabel('Time', color='white')
+                ax.set_ylabel('Players', color='white')
+                ax.set_title('Player count over time(included players in queue)', color='white')
+                ax.grid()
+                ax.plot(latest_pt_time, latest_pt_player_numbers, color='white')
+                figure_canvas_agg.draw()
+                constants.DATA_UPDATED = False
+
     # Frees up the resources used by the window once the while loop has been broken out of
     window.close()
     sys.exit()
+
+
+def startup_warning_window():
+    sg.theme(DEFAULT_WINDOW_THEME)
+
+    continue_with_action = True
+    delay_seconds = 30
+    start_time = time.time()
+    cancel_key = 'CANCEL'
+    continue_key = '-CONTINUE-'
+
+    text = (f"Do you wish to continue with the stored/given action?\n"
+            f"This window will automatically close after {delay_seconds} seconds.")
+
+    layout = [
+        [sg.Text(text)],
+        [sg.Button('Cancel', key=cancel_key), sg.Button('Continue', key=continue_key)]
+    ]
+
+    window = sg.Window('Continue with action?', layout=layout)
+
+    while True:
+        event, values = window.read(300)
+        if event in ('Exit', sg.WIN_CLOSED, cancel_key):
+            continue_with_action = False
+            log('Cancelled Action')
+            break
+
+        if event == continue_key:
+            break
+
+        if time.time() - start_time >= delay_seconds:
+            break
+
+    window.close()
+    return continue_with_action
 
 
 def server_address_warning_window():
@@ -573,6 +613,7 @@ def settings_window(config: ScriptConfigFile,
     window = sg.Window('Settings', layout, font=default_text_font, resizable=False, finalize=True, element_justification='l',
                        icon=seeding_image)
 
+    # This occurs here beacuse the window needs to be initialised to update the buttons.
     if stored_action is None:
         window[none_key].update(value=True)
     elif stored_action == close_game_key:
@@ -584,7 +625,7 @@ def settings_window(config: ScriptConfigFile,
 
     # Event loop
     while True:
-        event, values = window.Read(timeout=75)
+        event, values = window.Read()
 
         if event in ('Exit', sg.WIN_CLOSED):
             if config_initial != config:
