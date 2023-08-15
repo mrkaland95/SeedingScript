@@ -290,13 +290,13 @@ def autojoin_in_game_state_machine(config: ScriptConfigFile) -> bool:
             pyautogui.doubleClick(button_to_click.x, button_to_click.y, interval=0.06)
             # utils.log('Clicked on server, waiting to see if the join was successful.')
 
-        # elif current_state is AutoJoinStates.IN_FAVORITES:
-        #     iteration_time = time.time() - start_time
-        #     if iteration_time < 10:
-        #         time.sleep(10 - iteration_time)
-        #     if button_to_click:
-        #         pyautogui.click(button_to_click.x, button_to_click.y)
-        #         pyautogui.moveRel(0, 70)
+        elif current_state is AutoJoinStates.IN_FAVORITES:
+            iteration_time = time.time() - start_time
+            if iteration_time < 20:
+                time.sleep(20 - iteration_time)
+            if button_to_click:
+                pyautogui.click(button_to_click.x, button_to_click.y)
+                pyautogui.moveRel(0, 70)
 
         else:
             if button_to_click:
