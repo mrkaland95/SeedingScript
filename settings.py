@@ -21,6 +21,10 @@ pyautogui.FAILSAFE = False
 # QUEUE = multiprocessing.Queue()
 
 class ConfigKeys(StrEnum):
+    """
+    Class that defines the possible keys stored in the config file.
+    An enum is used instead of regular strings to make this process easier.
+    """
     PLAYER_NAME = auto()
     PLAYER_THRESHOLD = auto()
     ATTEMPT_RECONNECTION_TO_SERVER = auto()
@@ -49,6 +53,8 @@ class ConfigKeys(StrEnum):
     SCRIPT_AUTO_START_UPPER_TIME = auto()
     SCRIPT_AUTO_START_LOWER_TIME = auto()
     GAME_WINDOW_TITLE = auto()
+    ON_STARTUP_ACTION_DELAY = auto()
+    USE_ATTEMPT_AUTOJOIN_LIMIT = auto()
 
 
 class ScriptConfigFile:
@@ -202,7 +208,7 @@ def template_config():
         },
         ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS: {
             VALUE_KEY: 20,
-            DESCRIPTION_KEY: ''
+            DESCRIPTION_KEY: 'The time from when the game has launched until the script will perform the autojoin process.'
         },
         ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN: {
             VALUE_KEY: 'tactrig',
@@ -254,19 +260,28 @@ def template_config():
         },
         ConfigKeys.SCRIPT_AUTO_START_THRESHOLD: {
             VALUE_KEY: 20,
-            DESCRIPTION_KEY: 'The lower bound of players of where the automatic "watcher" thread will launch the part of the script that autojoins and performs the desired user action.'
+            DESCRIPTION_KEY: 'The minimum amount of players before the seedingscript thread will start'
         },
         ConfigKeys.SCRIPT_AUTO_START_LOWER_TIME: {
             VALUE_KEY: "11:00",
-            DESCRIPTION_KEY: 'The lower bound of players of where the automatic "watcher" thread will launch the part of the script that autojoins and performs the desired user action.'
+            DESCRIPTION_KEY: 'The earliest time at which the seedingthread can start'
         },
         ConfigKeys.SCRIPT_AUTO_START_UPPER_TIME: {
             VALUE_KEY: "12:00",
-            DESCRIPTION_KEY: 'The lower bound of players of where the automatic "watcher" thread will launch the part of the script that autojoins and performs the desired user action.'
+            DESCRIPTION_KEY: 'The latest time at which the seedingthread can start'
         },
         ConfigKeys.GAME_WINDOW_TITLE: {
             VALUE_KEY: 'SquadGame',
             DESCRIPTION_KEY: 'The title used to recognise the game window.'
+        },
+        ConfigKeys.USE_ATTEMPT_AUTOJOIN_LIMIT: {
+            VALUE_KEY: True,
+            DESCRIPTION_KEY: 'Whether the autojoin code should limit the amount of times the game can '
+        },
+        ConfigKeys.ON_STARTUP_ACTION_DELAY: {
+            VALUE_KEY: 30,
+            DESCRIPTION_KEY: 'The delay from when the script is started until the main window opens\n'
+                             'This delay is intended to give the user time to go into the setting or cancel the action, if desired.'
         }
     }
 

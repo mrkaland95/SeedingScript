@@ -21,17 +21,6 @@ from utils import (hibernate, close_process, launch_game, log)
 from constants import (SCRIPT_CONFIG_SETTINGS_FOLDER, GAME_SETTINGS_BACKUP_FOLDER, SCRIPT_CONFIG_SETTINGS_FILE, PT_TIME_STAMP,
                        PT_PLAYER_NUMBERS)
 
-# LOCAL_APPDATA = Path(os.environ.get('LOCALAPPDATA'))
-# SCRIPT_CONFIG_SETTINGS_FOLDER = LOCAL_APPDATA / 'SeedingScript'
-# SCRIPT_CONFIG_SETTINGS_FILE = SCRIPT_CONFIG_SETTINGS_FOLDER / 'seedingconfig.json'
-# GAME_CONFIG_PATH = LOCAL_APPDATA / 'SquadGame/Saved/Config/WindowsNoEditor'
-
-# programfiles_32 = os.environ["ProgramFiles(x86)"]
-# programfiles_64 = os.environ['ProgramW6432']
-# game_config_path = os.path.abspath(f"{LOCAL_APPDATA}/SquadGame/Saved/Config/WindowsNoEditor")
-# game_launcher_path_32 = f'{programfiles_32}/Steam/steamapps/common/Squad/squad_launcher.exe'
-# game_launcher_path_64 = f'{programfiles_64}/Steam/steamapps/common/Squad/squad_launcher.exe'
-# game_launcher_path = game_launcher_path_32 if os.path.exists(game_launcher_path_32) else game_launcher_path_64
 
 ##############################################################################################
 # Global bools
@@ -49,16 +38,14 @@ Features to be added:
 - If 
 """
 # TODO 4 - Add profiles for switching between settings for different servers.
-# TODO 5 - Add new states for being in queue, for rejoining a server, and for joining a modded server, in settings.
 # TODO 8 - Maybe add the possibility to add a shortcut to the start menu.
 # TODO 11 - Window that indicates that an error has happend. For example if there was no server address stored.
 # TODO add ability to lower the program in the system tray.
 # TODO Make a virtual environment(venv) so that only the necessary packages are included in the build.
 # TODO add a better check for which set of config files is currently active.
-# TODO Create a window that opens and gives the user some time to stop the seeding thread if there is an action stored.
 # TODO Implement a system that automatically starts the seeding thread based on player numbers and time frame.
 # TODO need to create some mechanism that exits the autojoin if it keeps trying to join a server but is unable to do so.
-# TODO fix the JSON file updating code(code for adding fields that are not in the saved field etc)
+# TODO fix the JSON file updating code(code for adding fields that are not in the saved field etc) - Mostly implemented
 """
 For that, can potentially check each setting individually, and if a certain amount of them are different, then overwrite etc.
 

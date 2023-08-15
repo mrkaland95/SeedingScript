@@ -233,8 +233,8 @@ def main_window(chosen_action: str | None,
         if event == toggle_graph_visibility_key:
             log('Toggled graph visibility', True)
             if len(constants.PT_TIME_STAMP) < 2:
-                log(f'There is not enough data to toggle the graph on\n. '
-                    f'Either start the SeedingScript thread or fetch info from the server via the ',
+                log(f'There is not enough data to toggle the graph on.\n'
+                    f'Either start the SeedingScript thread or fetch info from the server via the "Get server info" button',
                     write_to_stdout_only=True)
 
             graph_visible = not graph_visible
@@ -281,7 +281,6 @@ def main_window(chosen_action: str | None,
                 constants.PT_TIME_STAMP.append(now)
                 constants.PT_PLAYER_NUMBERS.append(server_info.player_count)
                 constants.DATA_UPDATED = True
-
             else:
                 log(f'Script was unable to fetch info from the server. Check your connection or that the stored IP and Query Port are correct.')
 
@@ -327,8 +326,10 @@ def main_window(chosen_action: str | None,
 
             # Only want to redraw the graph if new data is added.
             if constants.DATA_UPDATED:
-                latest_pt_time = constants.PT_TIME_STAMP[-constants.SAMPLE_MAX:]
-                latest_pt_player_numbers = constants.PT_PLAYER_NUMBERS[-constants.SAMPLE_MAX:]
+                # latest_pt_time = constants.PT_TIME_STAMP[-constants.SAMPLE_MAX:]
+                # latest_pt_player_numbers = constants.PT_PLAYER_NUMBERS[-constants.SAMPLE_MAX:]
+                latest_pt_time = constants.PT_TIME_STAMP
+                latest_pt_player_numbers = constants.PT_PLAYER_NUMBERS
 
                 ax.cla()
                 ax.tick_params(colors='white')
@@ -461,58 +462,58 @@ def settings_window(config: ScriptConfigFile,
             # Inner frame for on/off settings
             [sg.Frame('On/Off settings', font=default_text_font, layout=[
                 [sg.Checkbox('Automatic Server Joining', font=default_text_font,
-                             default=config.get(ConfigKeys.JOIN_SERVER_AUTOMATICALLY_ENABLED),
-                             key=ConfigKeys.JOIN_SERVER_AUTOMATICALLY_ENABLED, enable_events=True, tooltip=
-                             'Specifies whether the script will try to automatically join the desired server or not.\n'
-                             'By default this is on.')],
+                         default=config.get(ConfigKeys.JOIN_SERVER_AUTOMATICALLY_ENABLED),
+                         key=ConfigKeys.JOIN_SERVER_AUTOMATICALLY_ENABLED, enable_events=True, tooltip=
+                         'Specifies whether the script will try to automatically join the desired server or not.\n'
+                         'By default this is on.')],
 
                 [sg.Checkbox('Lightweight Seeding Settings', font=default_text_font,
-                             default=config.get(ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED),
-                             key=ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED, enable_events=True, tooltip=
-                             'This specifies whether the script will apply reduced graphical settings to the game before starting it.\n'
-                             'Some examples of the settings affected are; resolution, framerate limiter, resolution scaling.\n'
-                             'This will significantly reduce the usage amount of resources used by the game.\n'
-                             'Will restore your previous settings automatically after the seeding thread hits the given player threshold\n'
-                             'Alternatively if the game closes or the settings are not restored automatically for whatever reason\n'
-                             'This can be done using on of the buttons in the main window.')],
+                         default=config.get(ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED),
+                         key=ConfigKeys.LIGHTWEIGHT_SEEDING_SETTINGS_ENABLED, enable_events=True, tooltip=
+                         'This specifies whether the script will apply reduced graphical settings to the game before starting it.\n'
+                         'Some examples of the settings affected are; resolution, framerate limiter, resolution scaling.\n'
+                         'This will significantly reduce the usage amount of resources used by the game.\n'
+                         'Will restore your previous settings automatically after the seeding thread hits the given player threshold\n'
+                         'Alternatively if the game closes or the settings are not restored automatically for whatever reason\n'
+                         'This can be done using on of the buttons in the main window.')],
 
                 [sg.Checkbox('Close Seeding Process if Game Closes/Crashes',
-                             font=default_text_font,
-                             default=config.get(ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED),
-                             key=ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED, enable_events=True, tooltip=
-                             'Whether the seeding thread will close itself should the game be closed,\n'
-                             'if the game was launched by the script, and the game has crashed.\n'
-                             "Does not affect regular shutdown if that's the chosen action. ")],
+                         font=default_text_font,
+                         default=config.get(ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED),
+                         key=ConfigKeys.CLOSE_SCRIPT_IF_GAME_HAS_CLOSED, enable_events=True, tooltip=
+                         'Whether the seeding thread will close itself should the game be closed,\n'
+                         'if the game was launched by the script, and the game has crashed.\n'
+                         "Does not affect regular shutdown if that's the chosen action. ")],
 
                 [sg.Checkbox('Use Random Player Threshold',
-                             font=default_text_font,
-                             default=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED),
-                             key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED, enable_events=True, tooltip=
-                             'To increase the spread of when players disconnect. \n'
-                             'Chooses a random integer between the stored lower and upper bounds.\n'
-                             'By default on. Note that this overrides the manually set player threshold, \n'
-                             'But this is left as an option should the user wish to use their own threshold')],
+                         font=default_text_font,
+                         default=config.get(ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED),
+                         key=ConfigKeys.RANDOM_PLAYER_THRESHOLD_ENABLED, enable_events=True, tooltip=
+                         'To increase the spread of when players disconnect. \n'
+                         'Chooses a random integer between the stored lower and upper bounds.\n'
+                         'By default on. Note that this overrides the manually set player threshold, \n'
+                         'But this is left as an option should the user wish to use their own threshold')],
 
-                [sg.Checkbox('Attempt autojoin if already in the game',
-                             default=config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME),
-                             key=ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME, enable_events=True, tooltip=
-                             "Specifies whether the script will attempt to autojoin the desired server, \n"
-                             "regardless of the user already being in-game")],
+                [sg.Checkbox('Attempt Autojoin if Already in The Game',
+                         default=config.get(ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME),
+                         key=ConfigKeys.ATTEMPT_AUTOJOIN_IF_ALREADY_INGAME, enable_events=True, tooltip=
+                         "Specifies whether the script will attempt to autojoin the desired server, \n"
+                         "regardless of the user already being in-game")],
 
                 [sg.Checkbox('Attempt To Rejoin If Disconnected',
-                             default=config.get(ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER),
-                             key=ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER, enable_events=True, tooltip=
-                             'Whether the script will attempt to reconnect when the player name is not found in the server. By default off.\n'
-                             'Do note that an accurate player name should be specified if this setting is enabled,\n'
-                             'Otherwise the script will attempt to constantly reconnect beacuse it is not detecting the player in the game')],
+                         default=config.get(ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER),
+                         key=ConfigKeys.ATTEMPT_RECONNECTION_TO_SERVER, enable_events=True, tooltip=
+                         'Whether the script will attempt to reconnect when the player name is not found in the server. By default off.\n'
+                         'Do note that an accurate player name should be specified if this setting is enabled,\n'
+                         'Otherwise the script will attempt to constantly reconnect beacuse it is not detecting the player in the game')],
 
-                [sg.Frame("Stored script action - Performed automatically on launch",
+                [sg.Frame("Stored Script Action - Performed automatically on launch",
                           layout=[[radio_button_none, radio_button_close, radio_button_hibernate, radio_button_shutdown]],
                           font=default_text_font, tooltip="Stores actions that will be performed automatically when the script launches.")],
 
             ])],
 
-            [sg.Frame('Threshold of players', font=default_text_font, layout=[
+            [sg.Frame('Threshold of Players', font=default_text_font, layout=[
                 [sg.Text('Note: Disabling random player threshold \n'
                          'also overrides these', font=default_text_font)],
 
@@ -531,7 +532,7 @@ def settings_window(config: ScriptConfigFile,
 
              # Right bottom frame on the left main_seeding_loop frame.
              sg.Frame("", layout=[
-                 [sg.Text('Number of attempts to autojoin', font=default_text_font, )],
+                 [sg.Text('Number Of Attempts To Autojoin', font=default_text_font, )],
 
                  [sg.InputText(key=ConfigKeys.ATTEMPTS_TO_AUTOJOIN_SERVER, size=(5, 5),
                                font=default_text_font,
@@ -561,33 +562,33 @@ def settings_window(config: ScriptConfigFile,
     # Defining the right side of the settings window. Mainly contains input fields for paths
     right_col = sg.Column([
         [sg.Frame('', layout=[
-            [sg.Text('Squad game executable', font=default_text_font)],
+            [sg.Text('Squad Game Executable Name', font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.GAME_EXECUTABLE_NAME, font=default_text_font,
                           default_text=config.get(ConfigKeys.GAME_EXECUTABLE_NAME), enable_events=True)],
 
-            [sg.Text("Squad's launcher path", font=default_text_font)],
+            [sg.Text("Squad's Launcher Path", font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SQUAD_INSTALL_PATH, font=default_text_font,
                           default_text=config.get(ConfigKeys.SQUAD_INSTALL_PATH), enable_events=True),
              sg.FileBrowse(initial_folder=GAME_LAUNCHER_PATH)],
 
-            [sg.Text("Squad's steam URL handle", font=default_text_font)],
+            [sg.Text("Squad's Steam URL Handle", font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SQUAD_STEAM_URL_HANDLE, font=default_text_font,
                           default_text=config.get(ConfigKeys.SQUAD_STEAM_URL_HANDLE), enable_events=True)],
 
-            [sg.Text("Path to Squad's game config files", font=default_text_font)],
+            [sg.Text("Path to Squad's Game Config Files", font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SQUAD_CONFIG_FILES_PATH, font=default_text_font,
                           default_text=config.get(ConfigKeys.SQUAD_CONFIG_FILES_PATH), enable_events=True),
              sg.FolderBrowse(initial_folder=LOCAL_APPDATA)],
 
-            [sg.Text('Name of the server to join', font=default_text_font)],
+            [sg.Text('Handle of The Server To Join - Has to be favorited', font=default_text_font)],
             [sg.InputText(size=(35, 20), key=ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN, font=default_text_font,
                           default_text=config.get(ConfigKeys.SERVER_HANDLE_TO_AUTOJOIN),
                           enable_events=True,
-                          tooltip=f'The name of the server that the script will attempt to join,'
-                                  f'if the autojoin functionality is enabled. '
+                          tooltip=f'The name of the server that the script will attempt to join,\n'
+                                  f'if the autojoin functionality is enabled. \n'
                                   f'Do note that the server needs to be favourited for this to work.')],
 
-            [sg.Text('Player name', font=default_text_font,
+            [sg.Text('Player Name', font=default_text_font,
                      tooltip="The player's in game name. Not case sensitive, and tags are not required")],
             [sg.InputText(size=(35, 20), key=ConfigKeys.PLAYER_NAME,
                           default_text=config.get(ConfigKeys.PLAYER_NAME), enable_events=True,
@@ -598,14 +599,14 @@ def settings_window(config: ScriptConfigFile,
         # This is the delimiter for the column
     ])
 
-    # Full layout of the various elements
+    # Full layout
     layout = \
         [[sg.Text('Settings', font=('helvetica', 26))],
          [left_col, right_col],
          [sg.Button('Save', key=save_key), sg.Button('Reset to defaults', key=default_key),
           sg.Button('Open Script Settings Folder', key=settings_key)]]
 
-    # I've decided to this to enforce the numerical fields actually being numbers
+    # This is done so that numerical events can be iterated over together and enforced to be numbers.
     numerical_events = [ConfigKeys.PLAYER_THRESHOLD, ConfigKeys.SERVER_QUERY_PORT,
                         ConfigKeys.SLEEP_INTERVAL_SECONDS, ConfigKeys.ATTEMPTS_TO_AUTOJOIN_SERVER,
                         ConfigKeys.GAME_LAUNCH_TO_AUTO_JOIN_DELAY_SECONDS]
@@ -669,14 +670,15 @@ def settings_window(config: ScriptConfigFile,
             #     except ValueError:
             #         window.Element(event).Update(0)
 
-        # upper_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER]
-        # lower_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER]
-        # if lower_value >= upper_value:
-        #     window.Element(event).Update(upper_value - 1)
-        #     window.refresh()
-        # elif upper_value <= lower_value:
-        #     window.Element(event).Update(lower_value + 1)
-        #     window.refresh()
+        upper_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER]
+        lower_value = values[ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER]
+        if lower_value >= upper_value:
+            window.Element(ConfigKeys.RANDOM_PLAYER_THRESHOLD_LOWER).Update(upper_value - 1)
+            window.refresh()
+
+        if upper_value <= lower_value:
+            window.Element(ConfigKeys.RANDOM_PLAYER_THRESHOLD_UPPER).Update(lower_value + 1)
+            window.refresh()
 
         if event == save_key:
             if config != config_initial:
@@ -703,24 +705,30 @@ def getting_started_window(text_size=('helvetica', 12)):
     sg.theme(DEFAULT_WINDOW_THEME)
 
     help_text = """
-    To actually get the script running, there are just a few things you need to do:
+    To actually get the seeding thread working, there are just a few things you need to do:
+    
+    General:
     1. Go into the settings and input the IP and query port of the server you want to seed.
-        You can find this information in BattleMetrics under the address field. It will be formatted as follows:
+       You can find this information in BattleMetrics under the address field. It will be formatted as follows:
+       
+       <IP:PORT>
 
-        <IP:PORT>
+       Example:
 
-        Example:
-
-        127.0.0.1:1111
+       127.0.0.1:1111
 
     2. Input your in-game name into the player name field.
-    3. Input the name of the server you want to join in the corresponding field.
-        You don't need to input entire server name here, in-fact, this is probably going to make the auto-join not work.
-        So just input a recognizable part of it, ideally early on in the name.
-        For example, for TT specifically, just write "tactrig".
-    4. Save the settings and optionally change any other settings you may want to adjust.
-    5. Open the game and favorite the server you want to join.
-        This step is very important because the script currently does not support finding the server in the regular server browser.
+    
+    For the autojoin to work, you need to do the following as well.
+    
+    3. Input the name or unique part of the server you want to join in the corresponding field.
+       You don't need to input entire server name here, in-fact, for the moment, this will likely break the auto-join.
+       The phrase you choose should also be unique from any other servers you may have favorited.
+    
+    * Save the settings and optionally change any other settings you may want to adjust.
+    * Open the game and favorite the server you want to join.
+      This step is essential important because the script currently does not support finding the server in the regular server browser.
+    
 
     The script is now ready for use.
     You can click the "Start Seeding Script" button and choose whatever you want to happen when the player number hits its threshold.
